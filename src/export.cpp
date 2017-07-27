@@ -92,8 +92,8 @@ assignPipelines(rw::Atomic *atomic)
 	Geometry *g = atomic->geometry;
 	int hasSkin = rw::Skin::get(g) != NULL;
 	int hasMatFX = 0;
-	for(int i = 0; i < g->numMaterials; i++){
-		hasMatFX = *PLUGINOFFSET(MatFX*, g->materialList[i], matFXGlobals.materialOffset) != NULL;
+	for(int i = 0; i < g->matList.numMaterials; i++){
+		hasMatFX = *PLUGINOFFSET(MatFX*, g->matList.materials[i], matFXGlobals.materialOffset) != NULL;
 		if(hasMatFX)
 			break;
 	}

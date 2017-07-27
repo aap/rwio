@@ -1,5 +1,12 @@
-Good luck getting this to compile. The source code shouldn't be a big problem
-and should be compatible with the 3ds max SDK version of the last few years.
-Configuring Visual Studio projects for some version of the max SDK is the hard
-part. I have uploaded what works (or worked?) for me...at least if you move
-the src directory to the correct place...it's madness.
+RWio for 3ds max
+================
+
+This is an RW im-/exporter for 3ds max with support for GTA.
+
+# How to build
+
+Get premake5. Edit premake5.lua and have the projects point to your SDK version.
+Build librw and librwgta (both on github) for the win-amd64-null or
+win-x86-null platform and set the LIBRW and LIBRWGTA environment variables
+to point to the respective directories.
+Generate a VS project and build the version you need.

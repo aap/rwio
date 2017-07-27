@@ -214,24 +214,17 @@ convertMaterials(rw::Geometry *geo, INode *node)
 	Mtl *mtl = node->GetMtl();
 	rw::Material *mat;
 	if(mtl == NULL){
-		geo->numMaterials = 1;
-		geo->materialList = new rw::Material*[geo->numMaterials];
 		mat = rw::Material::create();
-		geo->materialList[0] = mat;
+		geo->matList.appendMaterial(mat);
 		DWORD wire = node->GetWireColor();
 		mat->color.red = GetRValue(wire);
 		mat->color.green = GetGValue(wire);
 		mat->color.blue = GetBValue(wire);
 	}else if(mtl->ClassID() == Class_ID(MULTI_CLASS_ID, 0)){
-		geo->numMaterials = mtl->NumSubMtls();
-		geo->materialList = new rw::Material*[geo->numMaterials];
-		for(int i = 0; i < geo->numMaterials; i++)
-			geo->materialList[i] = convertMaterial(mtl->GetSubMtl(i));
-	}else{
-		geo->numMaterials = 1;
-		geo->materialList = new rw::Material*[geo->numMaterials];
-		geo->materialList[0] = convertMaterial(mtl);
-	}
+		for(int i = 0; i < mtl->NumSubMtls(); i++)
+			geo->matList.appendMaterial(convertMaterial(mtl->GetSubMtl(i)));
+	}else
+		geo->matList.appendMaterial(convertMaterial(mtl));
 }
 
 // Gets the first n consecutive UV channels
@@ -298,7 +291,7 @@ DFFExport::convertGeometry(INode *node, int **vertexmap)
 		gta::allocateExtraVertColors(geo);
 	convertMaterials(geo, node);
 	if(geo->hasColoredMaterial())
-		geo->geoflags |= Geometry::MODULATE;
+		geo->flags |= Geometry::MODULATE;
 	geo->numVertices = 0;
 
 	int *remap = NULL;
@@ -391,7 +384,7 @@ DFFExport::convertGeometry(INode *node, int **vertexmap)
 				remap[idx] = mesh->faces[i].v[j];
 		}
 		MtlID id = mesh->getFaceMtlIndex(i);
-		geo->triangles[i].matId = id % geo->numMaterials;
+		geo->triangles[i].matId = id % geo->matList.numMaterials;
 	}
 
 	geo->buildMeshes();

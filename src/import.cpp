@@ -160,15 +160,15 @@ DFFImport::makeMaterials(rw::Atomic *a, INode *inode)
 	Geometry *g = a->geometry;
 	MultiMtl *multi = NULL;
 
-	if(g->numMaterials == 0)
+	if(g->matList.numMaterials == 0)
 		return;	// can this happen?
-	if(g->numMaterials > 1){
+	if(g->matList.numMaterials > 1){
 		multi = NewDefaultMultiMtl();
-		multi->SetNumSubMtls(g->numMaterials);
+		multi->SetNumSubMtls(g->matList.numMaterials);
 	}
 
-	for(int32 i = 0; i < g->numMaterials; i++){
-		rw::Material *m = g->materialList[i];
+	for(int32 i = 0; i < g->matList.numMaterials; i++){
+		rw::Material *m = g->matList.materials[i];
 		Mtl *mat = (Mtl*)ifc->CreateInstance(SClass_ID(MATERIAL_CLASS_ID), Class_ID(0x29b71842, 0x52508b70));
 		IParamBlock2 *pb = mat->GetParamBlock(0);
 
@@ -257,7 +257,7 @@ DFFImport::makeMaterials(rw::Atomic *a, INode *inode)
 				animateTexture(uvanim->interp[j]->currentAnim, dualmap);
 			}
 
-		if(g->numMaterials == 1){
+		if(g->matList.numMaterials == 1){
 			inode->SetMtl(mat);
 			return;
 		}
@@ -332,7 +332,7 @@ DFFImport::makeMesh(rw::Atomic *a, Mesh *maxmesh)
 		}
 	}
 
-	if(g->geoflags & rw::Geometry::PRELIT){
+	if(g->flags & rw::Geometry::PRELIT){
 		if(!maxmesh->mapSupport(MAP_ALPHA))
 			maxmesh->setMapSupport(MAP_ALPHA, TRUE);
 		uint8 *prelit = g->colors;
@@ -492,8 +492,8 @@ void
 printHier(INode *node, int indent)
 {
 	for(int i = 0; i < indent; i++)
-		lprintf("   ");
-	lprintf("%s\n", node->NodeName());
+		lprintf(_T("   "));
+	lprintf(_T("%s\n"), node->NodeName());
 	for(int i = 0; i < node->NumberOfChildren(); i++)
 		printHier(node->GetChildNode(i), indent+1);
 }

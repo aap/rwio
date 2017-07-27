@@ -1,3 +1,4 @@
+#define _CRT_SECURE_NO_WARNINGS
 #include "Max.h"
 #include <stdio.h>
 #include <direct.h>
@@ -25,7 +26,7 @@
 
 #include <rw.h>
 #include <rwgta.h>
-#include <collision.h>
+#include <collisions.h>
 
 #include "dffimp_res.h"
 

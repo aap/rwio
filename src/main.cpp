@@ -15,7 +15,8 @@ initRW(void)
 	//rw::platform = rw::PLATFORM_PS2;
 	rw::Engine::init();
 	gta::attachPlugins();
-	rw::Driver::open();
+	rw::Engine::open();
+	rw::Engine::start(nil);
 	rwInitialized = 1;
 }
 

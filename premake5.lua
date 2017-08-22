@@ -85,6 +85,9 @@ project "rwio2010"
 project "rwio2012"
 	maxsdk = "C:/Program Files (x86)/Autodesk/3ds Max 2012/maxsdk/"
 	maxplugin1(maxsdk)
+	debugdir "C:/Program Files/Autodesk/3ds Max 2012"
+	debugcommand "C:/Program Files/Autodesk/3ds Max 2012/3dsmax.exe"
+	postbuildcommands "copy /y \"$(TargetPath)\" \"C:\\Program Files\\Autodesk\\3ds Max 2012\\plugins\\\""
 
 project "rwio2014"
 	maxsdk = "C:/Users/aap/src/maxsdk/3ds Max 2014 SDK/maxsdk/"

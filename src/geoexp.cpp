@@ -186,18 +186,17 @@ convertMaterial(Mtl *mtl)
 	rwm->texture = convertTexture(difftex, masktex);
 
 	if(effects != MatFX::NOTHING){
-		MatFX *matfx = new MatFX;
-		*PLUGINOFFSET(MatFX*, rwm, matFXGlobals.materialOffset) = matfx;
-		matfx->setEffects(effects);
+		MatFX::setEffects(rwm, effects);
+		MatFX *matfx = MatFX::get(rwm);
 		if(effects == MatFX::BUMPMAP || effects == MatFX::BUMPENVMAP){
 			matfx->setBumpTexture(convertTexture(bumptex, NULL));
 			matfx->setBumpCoefficient(bumpCoef);
 		}
 		if(effects == MatFX::ENVMAP || effects == MatFX::BUMPENVMAP){
 			matfx->setEnvTexture(convertTexture(envtex, NULL));
-			matfx->setEnvCoefficient(bumpCoef);
+			matfx->setEnvCoefficient(envCoef);
 		}
-		if(effects & MatFX::DUAL){
+		if(effects == MatFX::DUAL || effects == MatFX::DUALUVTRANSFORM){
 			matfx->setDualTexture(convertTexture(dualtex, NULL));
 			matfx->setDualSrcBlend(srcblend);
 			matfx->setDualDestBlend(dstblend);
@@ -304,9 +303,9 @@ DFFExport::convertGeometry(INode *node, int **vertexmap)
 		for(int j = 0; j < 3; j++){
 			// vertex
 			int idx = mesh->faces[i].v[j];
-			v.p[0] = mesh->verts[idx].x;
-			v.p[1] = mesh->verts[idx].y;
-			v.p[2] = mesh->verts[idx].z;
+			v.p.x = mesh->verts[idx].x;
+			v.p.y = mesh->verts[idx].y;
+			v.p.z = mesh->verts[idx].z;
 
 			// normal
 			if(mask & 0x10){
@@ -322,25 +321,25 @@ DFFExport::convertGeometry(INode *node, int **vertexmap)
 							p3n = rv->ern[k].getNormal();
 							break;
 						}
-				v.n[0] = p3n.x;
-				v.n[1] = p3n.y;
-				v.n[2] = p3n.z;
+				v.n.x = p3n.x;
+				v.n.y = p3n.y;
+				v.n.z = p3n.z;
 			}
 
 			// prelight
 			if(mask & 0x100){
 				if(mesh->vcFace){
 					idx = mesh->vcFace[i].t[j];
-					v.c[0] = mesh->vertCol[idx].x*255;
-					v.c[1] = mesh->vertCol[idx].y*255;
-					v.c[2] = mesh->vertCol[idx].z*255;
+					v.c.red   = mesh->vertCol[idx].x*255;
+					v.c.green = mesh->vertCol[idx].y*255;
+					v.c.blue  = mesh->vertCol[idx].z*255;
 				}else
-					v.c[0] = v.c[1] = v.c[2] = 255;
+					v.c.red = v.c.green = v.c.blue = 255;
 				if(mesh->mapFaces(MAP_ALPHA)){
 					idx = mesh->mapFaces(MAP_ALPHA)[i].t[j];
-					v.c[3] = mesh->mapVerts(MAP_ALPHA)[idx].x*255;
+					v.c.alpha = mesh->mapVerts(MAP_ALPHA)[idx].x*255;
 				}else
-					v.c[3] = 255;
+					v.c.alpha = 255;
 			}
 
 			// SA extra colors
@@ -348,16 +347,16 @@ DFFExport::convertGeometry(INode *node, int **vertexmap)
 				if(mesh->mapFaces(MAP_EXTRACOLORS)){
 					idx = mesh->mapFaces(MAP_EXTRACOLORS)[i].t[j];
 					UVVert *col = mesh->mapVerts(MAP_EXTRACOLORS);
-					v.c1[0] = col[idx].x*255;
-					v.c1[1] = col[idx].y*255;
-					v.c1[2] = col[idx].z*255;
+					v.c1.red   = col[idx].x*255;
+					v.c1.green = col[idx].y*255;
+					v.c1.blue  = col[idx].z*255;
 				}else
-					v.c1[0] = v.c1[1] = v.c1[2] = 255;
+					v.c1.red = v.c1.green = v.c1.blue = 255;
 				if(mesh->mapFaces(MAP_EXTRAALPHA)){
 					idx = mesh->mapFaces(MAP_EXTRAALPHA)[i].t[j];
-					v.c1[3] = mesh->mapVerts(MAP_EXTRAALPHA)[idx].x*255;
+					v.c1.alpha = mesh->mapVerts(MAP_EXTRAALPHA)[idx].x*255;
 				}else
-					v.c1[3] = 255;
+					v.c1.alpha = 255;
 			}
 
 			// tex coords
@@ -366,12 +365,12 @@ DFFExport::convertGeometry(INode *node, int **vertexmap)
 				UVVert *uv = mesh->mapVerts(MAP_TEXCOORD0+k);
 				// ugly and wrong
 				if(k == 0){
-					v.t[0] = uv[idx].x;
-					v.t[1] = 1.0f-uv[idx].y;
+					v.t.u = uv[idx].x;
+					v.t.v = 1.0f-uv[idx].y;
 				}
 				if(k == 1){
-					v.t1[0] = uv[idx].x;
-					v.t1[1] = 1.0f-uv[idx].y;
+					v.t1.u = uv[idx].x;
+					v.t1.v = 1.0f-uv[idx].y;
 				}
 			}
 			idx = gta::findSAVertex(geo, NULL, mask, &v);

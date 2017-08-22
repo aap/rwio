@@ -8,35 +8,42 @@ float DFFImport::smoothingAngle = 45.0f;
 std::vector<INode*> DFFImport::lastImported;
 
 static int
-findFirstVertex(float *verts, int n, float *v)
+findFirstVertex(rw::V3d *verts, int n, rw::V3d *v)
 {
+	// compare as int because NaN != NaN (not seen with vertices yet, but be safe)
+	rw::uint32 *iverts, *iv;
+	iv = (rw::uint32*)v;
+	iverts = (rw::uint32*)verts;
 	for(int i = 0; i < n; i++) {
-		if(verts[0] == v[0] && verts[1] == v[1] && verts[2] == v[2])
+		if(iverts[0] == iv[0] && iverts[1] == iv[1] && iverts[2] == iv[2])
 			return i;
-		verts += 3;
+		iverts += 3;
 	}
 	/* shouldn't happen */
 	return -1;
 }
 
 static int
-findFirstTexCoord(float *verts, int n, float *v)
+findFirstTexCoord(rw::TexCoords *verts, int n, rw::TexCoords *v)
 {
+	// compare as int because NaN != NaN and some files have that
+	rw::uint32 *iverts, *iv;
+	iv = (rw::uint32*)v;
+	iverts = (rw::uint32*)verts;
 	for(int i = 0; i < n; i++) {
-		if(verts[0] == v[0] && verts[1] == v[1])
+		if(iverts[0] == iv[0] && iverts[1] == iv[1])
 			return i;
-		verts += 2;
+		iverts += 2;
 	}
 	/* shouldn't happen */
 	return -1;
 }
 
 static int
-findFirstColor(rw::uint8 *verts, int n, rw::uint8 *v)
+findFirstColor(rw::RGBA *verts, int n, rw::RGBA *v)
 {
 	for(int i = 0; i < n; i++) {
-		if(verts[0] == v[0] && verts[1] == v[1] &&
-		   verts[2] == v[2] && verts[3] == v[3])
+		if(rw::equal(*verts, *v))
 			return i;
 		verts += 4;
 	}
@@ -275,15 +282,17 @@ DFFImport::makeMesh(rw::Atomic *a, Mesh *maxmesh)
 	Geometry *g = a->geometry;
 
 	// not all GTA tools generate face info correctly :(
-	delete[] g->triangles;
-	g->triangles = NULL;
-	g->numTriangles = 0;
-	g->generateTriangles();
+	if(g->meshHeader){
+		delete[] g->triangles;
+		g->triangles = NULL;
+		g->numTriangles = 0;
+		g->generateTriangles();
+	}
 
-	float *gverts = g->morphTargets[0].vertices;
+	V3d *gverts = g->morphTargets[0].vertices;
 	int *newind = new int[g->numVertices];
 	for(int32 i = 0; i < g->numVertices; i++){
-		int j = findFirstVertex(gverts, g->numVertices, &gverts[i*3]);
+		int j = findFirstVertex(gverts, g->numVertices, &gverts[i]);
 		assert(j >= 0);
 		newind[i] = j;
 	}
@@ -291,9 +300,9 @@ DFFImport::makeMesh(rw::Atomic *a, Mesh *maxmesh)
 	Point3 maxvert;
 	for(int32 i = 0; i < g->numVertices; i++){
 		int j = newind[i];
-		maxvert[0] = gverts[j*3+0];
-		maxvert[1] = gverts[j*3+1];
-		maxvert[2] = gverts[j*3+2];
+		maxvert[0] = gverts[j].x;
+		maxvert[1] = gverts[j].y;
+		maxvert[2] = gverts[j].z;
 		maxmesh->setVert(i, maxvert);
 	}
 	maxmesh->setNumFaces(g->numTriangles);
@@ -308,9 +317,9 @@ DFFImport::makeMesh(rw::Atomic *a, Mesh *maxmesh)
 
 	for(int k = 0; k < g->numTexCoordSets; k++){
 		maxmesh->setMapSupport(MAP_TEXCOORD0+k, TRUE);
-		float *uvs = g->texCoords[k];
+		TexCoords *uvs = g->texCoords[k];
 		for(int32 i = 0; i < g->numVertices; i++){
-			int j = findFirstTexCoord(uvs, g->numVertices, &uvs[i*2]);
+			int j = findFirstTexCoord(uvs, g->numVertices, &uvs[i]);
 			assert(j >= 0);
 			newind[i] = j;
 		}
@@ -318,8 +327,8 @@ DFFImport::makeMesh(rw::Atomic *a, Mesh *maxmesh)
 		Point3 maxvert;
 		for(int32 i = 0; i < g->numVertices; i++){
 			int j = newind[i];
-			maxvert[0] = uvs[j*2+0];
-			maxvert[1] = 1-uvs[j*2+1];
+			maxvert[0] = uvs[j].u;
+			maxvert[1] = 1-uvs[j].v;
 			maxvert[2] = 0.0f;
 			maxmesh->setMapVert(MAP_TEXCOORD0+k, i, maxvert);
 		}
@@ -335,9 +344,9 @@ DFFImport::makeMesh(rw::Atomic *a, Mesh *maxmesh)
 	if(g->flags & rw::Geometry::PRELIT){
 		if(!maxmesh->mapSupport(MAP_ALPHA))
 			maxmesh->setMapSupport(MAP_ALPHA, TRUE);
-		uint8 *prelit = g->colors;
+		rw::RGBA *prelit = g->colors;
 		for(int32 i = 0; i < g->numVertices; i++){
-			int j = findFirstColor(prelit, g->numVertices, &prelit[i*4]);
+			int j = findFirstColor(prelit, g->numVertices, &prelit[i]);
 			assert(j >= 0);
 			newind[i] = j;
 		}
@@ -346,11 +355,11 @@ DFFImport::makeMesh(rw::Atomic *a, Mesh *maxmesh)
 		Point3 maxvert;
 		for(int32 i = 0; i < g->numVertices; i++){
 			int j = newind[i];
-			maxvert[0] = prelit[j*4+0]/255.0f;
-			maxvert[1] = prelit[j*4+1]/255.0f;
-			maxvert[2] = prelit[j*4+2]/255.0f;
+			maxvert[0] = prelit[j].red/255.0f;
+			maxvert[1] = prelit[j].green/255.0f;
+			maxvert[2] = prelit[j].blue/255.0f;
 			maxmesh->vertCol[i] = maxvert;
-			maxvert[0] = maxvert[1] = maxvert[2] = prelit[j*4+3]/255.0f;
+			maxvert[0] = maxvert[1] = maxvert[2] = prelit[j].alpha/255.0f;
 			maxmesh->setMapVert(MAP_ALPHA, i, maxvert);
 		}
 		maxmesh->setNumVCFaces(g->numTriangles);
@@ -368,9 +377,9 @@ DFFImport::makeMesh(rw::Atomic *a, Mesh *maxmesh)
 	if(colordata->nightColors){
 		maxmesh->setMapSupport(MAP_EXTRACOLORS, TRUE);
 		maxmesh->setMapSupport(MAP_EXTRAALPHA, TRUE);
-		uint8 *prelit = colordata->nightColors;
+		rw::RGBA *prelit = colordata->nightColors;
 		for(int32 i = 0; i < g->numVertices; i++){
-			int j = findFirstColor(prelit, g->numVertices, &prelit[i*4]);
+			int j = findFirstColor(prelit, g->numVertices, &prelit[i]);
 			assert(j >= 0);
 			newind[i] = j;
 		}
@@ -379,11 +388,11 @@ DFFImport::makeMesh(rw::Atomic *a, Mesh *maxmesh)
 		Point3 maxvert;
 		for(int32 i = 0; i < g->numVertices; i++){
 			int j = newind[i];
-			maxvert[0] = prelit[j*4+0]/255.0f;
-			maxvert[1] = prelit[j*4+1]/255.0f;
-			maxvert[2] = prelit[j*4+2]/255.0f;
+			maxvert[0] = prelit[j].red/255.0f;
+			maxvert[1] = prelit[j].green/255.0f;
+			maxvert[2] = prelit[j].blue/255.0f;
 			maxmesh->setMapVert(MAP_EXTRACOLORS, i, maxvert);
-			maxvert[0] = maxvert[1] = maxvert[2] = prelit[j*4+3]/255.0f;
+			maxvert[0] = maxvert[1] = maxvert[2] = prelit[j].alpha/255.0f;
 			maxmesh->setMapVert(MAP_EXTRAALPHA, i, maxvert);
 		}
 		maxmesh->setNumMapFaces(MAP_EXTRACOLORS, g->numTriangles);
@@ -413,6 +422,7 @@ DFFImport::makeMesh(rw::Atomic *a, Mesh *maxmesh)
 	delete[] newind;
 }
 
+/*
 // TODO: delete
 static void
 getBonePositions(rw::Skin *skin, rw::HAnimHierarchy *hier, Point3 *positions)
@@ -431,16 +441,17 @@ getBonePositions(rw::Skin *skin, rw::HAnimHierarchy *hier, Point3 *positions)
 		*positions++ = pos;
 	}
 }
+*/
 
 static int
 findVertex(rw::Geometry *g, Point3 *v)
 {
 	using namespace rw;
-	float *verts = g->morphTargets[0].vertices;
+	V3d *verts = g->morphTargets[0].vertices;
 	for(int32 i = 0; i < g->numVertices; i++){
-		if(abs(verts[i*3+0]-v->x) < 0.0001f &&
-		   abs(verts[i*3+1]-v->y) < 0.0001f &&
-		   abs(verts[i*3+2]-v->z) < 0.0001f)
+		if(abs(verts[i].x-v->x) < 0.0001f &&
+		   abs(verts[i].y-v->y) < 0.0001f &&
+		   abs(verts[i].z-v->z) < 0.0001f)
 			return i;
 	}
 	return -1;
@@ -468,15 +479,15 @@ void
 DFFImport::axesHeuristics(rw::Frame *f)
 {
 	static rw::Matrix bipmat = {
-		{0.0f, 0.0f, 1.0f}, 0.0f,
-		{1.0f, 0.0f, 0.0f}, 0.0f,
-		{0.0f, 1.0f, 0.0f}, 0.0f,
-		{0.0f, 0.0f, 0.0f}, 1.0f
+		{0.0f, 0.0f, 1.0f}, rw::Matrix::TYPEORTHONORMAL,
+		{1.0f, 0.0f, 0.0f}, 0,
+		{0.0f, 1.0f, 0.0f}, 0,
+		{0.0f, 0.0f, 0.0f}, 0
 	};
 
-	// If the root transform is not the identity we're in
+	// If the root transform is not identity we're in
 	// RW world coordinates.
-	this->isWorldSpace = !f->matrix.isIdentity();
+	this->isWorldSpace = !(f->matrix.flags & rw::Matrix::IDENTITY);
 
 	// This heuristic is wrong if we aren't in world space
 	// and the root's only child happens to have a biped matrix.
@@ -485,7 +496,10 @@ DFFImport::axesHeuristics(rw::Frame *f)
 	rw::Frame *child = f->child;
 	this->isBiped = 0;
 	if(child && child->next == NULL)
-		this->isBiped = rw::equal(child->matrix, bipmat);
+		this->isBiped = rw::equal(child->matrix.right, bipmat.right) &&
+			rw::equal(child->matrix.at, bipmat.at) &&
+			rw::equal(child->matrix.up, bipmat.up) &&
+			rw::equal(child->matrix.pos, bipmat.pos);
 }
 
 void
@@ -551,8 +565,8 @@ DFFImport::dffFileRead(const TCHAR *filename)
 
 	FORLIST(lnk, c->atomics){
 		Atomic *a = Atomic::fromClump(lnk);
-		ObjPipeline *p = a->getPipeline();
-		p->uninstance(a);
+		a->uninstance();
+		ps2::unconvertADC(a->geometry);
 	}
 
 
@@ -880,7 +894,8 @@ noskin:
 	INode *realroot;
 	// Remove dummy node if one was inserted on export
 	if(this->convertHierarchy &&
-	   (this->isWorldSpace || hier)){
+	   (this->isWorldSpace || hier) &&
+	   rootnode->GetChildNode(0)){
 		realroot = rootnode->GetChildNode(0);
 		rootnode->Delete(t, TRUE);	// ImpNode crash
 	}else

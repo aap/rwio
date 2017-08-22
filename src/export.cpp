@@ -1,31 +1,38 @@
 #include "dffimp.h"
 
 static rw::Matrix flipZMat = {
-	{-1.0f, 0.0f,  0.0f}, 0.0f,
-	{ 0.0f, 1.0f,  0.0f}, 0.0f,
-	{ 0.0f, 0.0f, -1.0f}, 0.0f,
-	{ 0.0f, 0.0f,  0.0f}, 1.0f
+	{-1.0f, 0.0f,  0.0f}, rw::Matrix::TYPEORTHONORMAL,
+	{ 0.0f, 1.0f,  0.0f}, 0,
+	{ 0.0f, 0.0f, -1.0f}, 0,
+	{ 0.0f, 0.0f,  0.0f}, 0
 };
 
 static rw::Matrix bipmat = {
-	{0.0f, 0.0f, 1.0f}, 0.0f,
-	{1.0f, 0.0f, 0.0f}, 0.0f,
-	{0.0f, 1.0f, 0.0f}, 0.0f,
-	{0.0f, 0.0f, 0.0f}, 1.0f,
+	{0.0f, 0.0f, 1.0f}, rw::Matrix::TYPEORTHONORMAL,
+	{1.0f, 0.0f, 0.0f}, 0,
+	{0.0f, 1.0f, 0.0f}, 0,
+	{0.0f, 0.0f, 0.0f}, 0,
 };
 
 static rw::Matrix invbipmat = {
-	{0.0f, 1.0f, 0.0f}, 0.0f,
-	{0.0f, 0.0f, 1.0f}, 0.0f,
-	{1.0f, 0.0f, 0.0f}, 0.0f,
-	{0.0f, 0.0f, 0.0f}, 1.0f,
+	{0.0f, 1.0f, 0.0f}, rw::Matrix::TYPEORTHONORMAL,
+	{0.0f, 0.0f, 1.0f}, 0,
+	{1.0f, 0.0f, 0.0f}, 0,
+	{0.0f, 0.0f, 0.0f}, 0,
 };
 
 static rw::Matrix rwworldmat = {
-	{1.0f, 0.0f,  0.0f}, 0.0f,
-	{0.0f, 0.0f, -1.0f}, 0.0f,
-	{0.0f, 1.0f,  0.0f}, 0.0f,
-	{0.0f, 0.0f,  0.0f}, 1.0f,
+	{1.0f, 0.0f,  0.0f}, rw::Matrix::TYPEORTHONORMAL,
+	{0.0f, 0.0f, -1.0f}, 0,
+	{0.0f, 1.0f,  0.0f}, 0,
+	{0.0f, 0.0f,  0.0f}, 0,
+};
+
+static rw::Matrix rwidentmat = {
+	{1.0f, 0.0f, 0.0f}, rw::Matrix::IDENTITY | rw::Matrix::TYPEORTHONORMAL,
+	{0.0f, 1.0f, 0.0f}, 0,
+	{0.0f, 0.0f, 1.0f}, 0,
+	{0.0f, 0.0f, 0.0f}, 0,
 };
 
 int DFFExport::exportLit = 1;
@@ -139,19 +146,16 @@ convertMatrix(rw::Matrix *out, Matrix3 *mat)
 	out->right.x  = m[0][0];
 	out->right.y  = m[0][1];
 	out->right.z  = m[0][2];
-	out->rightw = 0.0f;
 	out->up.x  = m[1][0];
 	out->up.y  = m[1][1];
 	out->up.z  = m[1][2];
-	out->upw = 0.0f;
 	out->at.x = m[2][0];
 	out->at.y = m[2][1];
 	out->at.z = m[2][2];
-	out->atw = 0.0f;
 	out->pos.x = m[3][0];
 	out->pos.y = m[3][1];
 	out->pos.z = m[3][2];
-	out->posw = 1.0f;
+	out->optimize();
 }
 
 static void
@@ -272,26 +276,15 @@ static void
 transformGeometry(rw::Geometry *geo, rw::Matrix *mat)
 {
 	rw::Matrix inv, nmat;
-	rw::V3d v, n;
 	rw::Matrix::invert(&inv, mat);
 	rw::Matrix::transpose(&nmat, &inv);
-	float *verts = geo->morphTargets[0].vertices;
-	float *norms = geo->morphTargets[0].normals;
-	for(int i = 0; i < geo->numVertices; i++){
-		v = mat->transPoint(rw::V3d(verts[0], verts[1], verts[2]));
-		verts[0] = v.x;
-		verts[1] = v.y;
-		verts[2] = v.z;
-		verts += 3;
+	// TODO: all MOPRH targets
+	rw::V3d *verts = geo->morphTargets[0].vertices;
+	rw::V3d *norms = geo->morphTargets[0].normals;
 
-		if(norms){
-			n = nmat.transVec(rw::V3d(norms[0], norms[1], norms[2]));
-			norms[0] = n.x;
-			norms[1] = n.y;
-			norms[2] = n.z;
-			norms += 3;
-		}
-	}
+	rw::V3d::transformPoints(verts, verts, geo->numVertices, mat);
+	if(norms)
+		rw::V3d::transformVectors(norms, norms, geo->numVertices, &nmat);
 }
 
 // Transform the geometry data of node so that it will
@@ -361,13 +354,14 @@ flipFrameZ(rw::Frame *frame)
 {
 	using namespace rw;
 	V3d pos;
-	rw::Matrix tmp;
+	// TODO: this is a bit ugly, clean up
 	rw::Matrix *m = &frame->matrix;
 	pos = m->pos;
 	m->pos.set(0.0f, 0.0f, 0.0f);
-	rw::Matrix::mult(&tmp, m, &flipZMat);
-	*m = tmp;
+	m->optimize();
+	frame->transform(&flipZMat, rw::COMBINEPRECONCAT);
 	m->pos = pos;
+	m->optimize();
 	frame->updateObjects();
 }
 
@@ -556,21 +550,19 @@ DFFExport::writeDFF(const TCHAR *filename)
 	}
 
 	// Fix up frames.
+	rw::Matrix tmp;
 	BOOL isbiped = FALSE;
 	rootnode->GetUserPropBool(_T("fakeBiped"), isbiped);
 	if(this->worldSpace){
-		rw::Matrix::mult(&clump->getFrame()->matrix, &rwworldmat, &rootFrame->matrix);
-		if(isbiped){
-			rw::Matrix tmp;
-			rw::Matrix::mult(&tmp, &clump->getFrame()->matrix, &invbipmat);
-			clump->getFrame()->matrix = tmp;
-		}
+		rw::Matrix::mult(&tmp, &rootFrame->matrix, &rwworldmat);
+		clump->getFrame()->transform(&tmp, rw::COMBINEREPLACE);
+		if(isbiped)
+			clump->getFrame()->transform(&invbipmat, rw::COMBINEPRECONCAT);
 	}
 	if(isbiped)
-		rootFrame->matrix = bipmat;
+		rootFrame->transform(&bipmat, rw::COMBINEREPLACE);
 	else
-		rootFrame->matrix.setIdentity();
-	clump->getFrame()->updateObjects();
+		rootFrame->transform(&rwidentmat, rw::COMBINEREPLACE);
 
 	// Create skinned geometries after frame hierarchy is done.
 	if(this->exportSkin){

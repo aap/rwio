@@ -45,7 +45,7 @@ findFirstColor(rw::RGBA *verts, int n, rw::RGBA *v)
 	for(int i = 0; i < n; i++) {
 		if(rw::equal(*verts, *v))
 			return i;
-		verts += 4;
+		verts++;
 	}
 	/* shouldn't happen */
 	return -1;
@@ -282,12 +282,13 @@ DFFImport::makeMesh(rw::Atomic *a, Mesh *maxmesh)
 	Geometry *g = a->geometry;
 
 	// not all GTA tools generate face info correctly :(
-	if(g->meshHeader){
-		delete[] g->triangles;
-		g->triangles = NULL;
-		g->numTriangles = 0;
-		g->generateTriangles();
-	}
+// currently broken
+//	if(g->meshHeader){
+//		delete[] g->triangles;
+//		g->triangles = NULL;
+//		g->numTriangles = 0;
+//		g->generateTriangles();
+//	}
 
 	V3d *gverts = g->morphTargets[0].vertices;
 	int *newind = new int[g->numVertices];
@@ -422,7 +423,6 @@ DFFImport::makeMesh(rw::Atomic *a, Mesh *maxmesh)
 	delete[] newind;
 }
 
-/*
 // TODO: delete
 static void
 getBonePositions(rw::Skin *skin, rw::HAnimHierarchy *hier, Point3 *positions)
@@ -441,7 +441,6 @@ getBonePositions(rw::Skin *skin, rw::HAnimHierarchy *hier, Point3 *positions)
 		*positions++ = pos;
 	}
 }
-*/
 
 static int
 findVertex(rw::Geometry *g, Point3 *v)
@@ -518,6 +517,32 @@ DFFImport::saveNodes(INode *node)
 	lastImported.push_back(node);
 	for(int i = 0; i < node->NumberOfChildren(); i++)
 		saveNodes(node->GetChildNode(i));
+}
+
+static int
+getNumChildren(rw::Frame *f)
+{
+	int n = 0;
+	rw::Frame *c;
+	for(c = f->child; c; c = c->next)
+		n++;
+	return n;
+}
+
+static int
+getChildIndex(rw::Frame *child)
+{
+	int n = 0;
+	rw::Frame *c;
+	if(child->getParent() == nil)
+		return 0;
+	for(c = child->getParent()->child; c; c = c->next){
+		if(c == child)
+			return n;
+		n++;
+	}
+	// cannot happen
+	return -1;
 }
 
 //#define USE_IMPNODES 0
@@ -651,6 +676,9 @@ DFFImport::dffFileRead(const TCHAR *filename)
 				bones[hier->getIndex(hanim->id)] = node;
 			}
 		}
+
+		if(f->getParent() && getNumChildren(f->getParent()) > 1)
+			node->SetUserPropInt(_T("childNum"), getChildIndex(f));
 
 		// GTA Node name
 		char *name = gta::getNodeName(f);
@@ -793,16 +821,14 @@ DFFImport::dffFileRead(const TCHAR *filename)
 
 #if 0
 	Point3 positions[256];
-	if(skinAtomics && hier){A
-		Frame *f = skinAtomics[0]->getFrame();
-		rw::Skin *rwskin = *PLUGINOFFSET(rw::Skin*, skinAtomics[0]->geometry, rw::skinGlobals.offset);
-		f->updateLTM();
+	if(skinAtomics && hier){
+		rw::Skin *rwskin = rw::Skin::get(skinAtomics[0]->geometry);
 		Matrix3 matrix;
-		float *m = f->ltm;
-		matrix.SetRow(0, Point3(m[0],  m[1],  m[2]));
-		matrix.SetRow(1, Point3(m[4],  m[5],  m[6]));
-		matrix.SetRow(2, Point3(m[8],  m[9],  m[10]));
-		matrix.SetRow(3, Point3(m[12], m[13], m[14]));
+		rw::Matrix *m = skinAtomics[0]->getFrame()->getLTM();
+		matrix.SetRow(0, Point3(m->right.x,  m->right.y,  m->right.z));
+		matrix.SetRow(1, Point3(m->up.x,  m->up.y,  m->up.z));
+		matrix.SetRow(2, Point3(m->at.x,  m->at.y,  m->at.z));
+		matrix.SetRow(3, Point3(m->pos.x,  m->pos.y,  m->pos.z));
 		getBonePositions(rwskin, hier, positions);
 		matrix.TransformPoints(positions, hier->numNodes);
 		for(int32 i = 0; i < hier->numNodes; i++){
@@ -811,6 +837,7 @@ DFFImport::dffFileRead(const TCHAR *filename)
 		}
 	}
 #endif
+
 	/* build hierarchy */
 	INode *rootnode = NULL;
 	for(int j = 0; j < numFrames; j++){

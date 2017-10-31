@@ -18,6 +18,8 @@ initRW(void)
 	rw::Engine::open();
 	rw::Engine::start(nil);
 	rwInitialized = 1;
+	rw::Texture::setCreateDummies(1);
+	rw::Texture::setLoadTextures(0);
 }
 
 // Importer

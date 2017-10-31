@@ -1,5 +1,7 @@
 #include "dffimp.h"
 
+rw::Matrix::Tolerance exportTolerance = { 0.001, 0.001, 0.001 };
+
 static rw::Matrix flipZMat = {
 	{-1.0f, 0.0f,  0.0f}, rw::Matrix::TYPEORTHONORMAL,
 	{ 0.0f, 1.0f,  0.0f}, 0,
@@ -155,7 +157,7 @@ convertMatrix(rw::Matrix *out, Matrix3 *mat)
 	out->pos.x = m[3][0];
 	out->pos.y = m[3][1];
 	out->pos.z = m[3][2];
-	out->optimize();
+	out->optimize(&exportTolerance);
 }
 
 static void
@@ -349,6 +351,15 @@ getID(INode *node, int *id)
 	return 0;
 }
 
+static int
+getChildNum(INode *node)
+{
+	int num;
+	if(node->GetUserPropInt(_T("childNum"), num))
+		return num;
+	return -1;
+}
+
 static void
 flipFrameZ(rw::Frame *frame)
 {
@@ -358,16 +369,18 @@ flipFrameZ(rw::Frame *frame)
 	rw::Matrix *m = &frame->matrix;
 	pos = m->pos;
 	m->pos.set(0.0f, 0.0f, 0.0f);
-	m->optimize();
+	m->optimize(&exportTolerance);
 	frame->transform(&flipZMat, rw::COMBINEPRECONCAT);
 	m->pos = pos;
-	m->optimize();
+	m->optimize(&exportTolerance);
 	frame->updateObjects();
 }
 
 struct SortNode
 {
 	int id;
+	const MCHAR *name;
+	int childNum;
 	INode *node;
 };
 
@@ -380,6 +393,17 @@ sortByID(const void *a, const void *b)
 	if(na->id < 0) return 1;
 	if(nb->id < 0) return -1;
 	return na->id - nb->id;
+}
+
+static int
+sortByChildNum(const void *a, const void *b)
+{
+	SortNode *na = (SortNode*)a;
+	SortNode *nb = (SortNode*)b;
+	// sort nodes with no or negative tag to the back
+	if(na->childNum < 0) return 1;
+	if(nb->childNum < 0) return -1;
+	return na->childNum - nb->childNum;
 }
 
 void
@@ -452,8 +476,13 @@ DFFExport::convertNode(rw::Clump *clump, rw::Frame *frame, INode *node, int flip
 		children[i].node = node->GetChildNode(i);
 		getID(children[i].node, &id);
 		children[i].id = id;
+		children[i].name = node->GetName();
+		children[i].childNum = getChildNum(children[i].node);
 	}
-	qsort(children, numChildren, sizeof(*children), sortByID);
+
+	qsort(children, numChildren, sizeof(*children), sortByChildNum);
+//	qsort(children, numChildren, sizeof(*children), sortByID);
+
 	for(int i = 0; i < numChildren; i++){
 		Frame *childframe = Frame::create();
 		frame->addChild(childframe, 1);

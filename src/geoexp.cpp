@@ -45,7 +45,6 @@ convertTexture(Texmap *tex, Texmap *mask)
 		maskname = (TCHAR*)bmmask->GetMapName();
 	}
 
-//	Texture *rwt = Texture::create(Raster::create(0, 0, 0, 0x80));
 	Texture *rwt = Texture::create(NULL);
 #ifdef _UNICODE
 	char fuckmax[MAX_PATH];

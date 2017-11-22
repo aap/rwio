@@ -486,7 +486,10 @@ DFFImport::axesHeuristics(rw::Frame *f)
 
 	// If the root transform is not identity we're in
 	// RW world coordinates.
-	this->isWorldSpace = !(f->matrix.flags & rw::Matrix::IDENTITY);
+	// But we have to be careful with the flags, IDENTITY is not set by frame stream read.
+	rw::Matrix root = f->matrix;
+	root.optimize();
+	this->isWorldSpace = !(root.flags & rw::Matrix::IDENTITY);
 
 	// This heuristic is wrong if we aren't in world space
 	// and the root's only child happens to have a biped matrix.

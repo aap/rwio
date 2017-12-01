@@ -10,6 +10,7 @@
 #include <iskin.h>
 #include <modstack.h>
 #include <icustattribcontainer.h>
+#include <meshnormalspec.h>
 #include <custattrib.h>
 #if MAX_API_NUM <= 33	// 2010
 #include <maxscrpt/maxscrpt.h>
@@ -87,6 +88,7 @@ public:
 	static int autoSmooth;
 	static int prepend;
 	static float smoothingAngle;
+	static int explicitNormals;
 
 	void makeMaterials(rw::Atomic *a, INode *inode);
 	void makeMesh(rw::Atomic *a, Mesh *maxmesh);

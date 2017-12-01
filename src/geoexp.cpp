@@ -308,6 +308,7 @@ DFFExport::convertGeometry(INode *node, int **vertexmap)
 
 			// normal
 			if(mask & 0x10){
+				// Get render normal
 				RVertex *rv = &mesh->getRVert(idx);
 				int numN = rv->rFlags & NORCT_MASK;
 				Point3 p3n;
@@ -320,6 +321,13 @@ DFFExport::convertGeometry(INode *node, int **vertexmap)
 							p3n = rv->ern[k].getNormal();
 							break;
 						}
+				// If there's an explicit normal, use that instead
+				MeshNormalSpec *normalSpec = mesh->GetSpecifiedNormals();
+				if(normalSpec && i < normalSpec->GetNumFaces()){
+					MeshNormalFace &f = normalSpec->Face(i);
+					if(f.GetSpecified(j))
+						p3n = normalSpec->Normal(f.GetNormalID(j));
+				}
 				v.n.x = p3n.x;
 				v.n.y = p3n.y;
 				v.n.z = p3n.z;

@@ -30,3 +30,4 @@
 #define IDC_WORLDSPACE                          40019
 #define IDC_HANIM                               40021
 #define IDC_RS_EXTRACOLORS                      40022
+#define IDC_EXPLNORM                            40023

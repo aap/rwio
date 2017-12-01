@@ -4,6 +4,7 @@ int DFFImport::convertHierarchy = 1;
 int DFFImport::autoSmooth = 1;
 int DFFImport::prepend;
 float DFFImport::smoothingAngle = 45.0f;
+int DFFImport::explicitNormals = 0;
 
 std::vector<INode*> DFFImport::lastImported;
 
@@ -291,6 +292,7 @@ DFFImport::makeMesh(rw::Atomic *a, Mesh *maxmesh)
 //	}
 
 	V3d *gverts = g->morphTargets[0].vertices;
+	V3d *gnorms = g->morphTargets[0].normals;
 	int *newind = new int[g->numVertices];
 	for(int32 i = 0; i < g->numVertices; i++){
 		int j = findFirstVertex(gverts, g->numVertices, &gverts[i]);
@@ -314,6 +316,34 @@ DFFImport::makeMesh(rw::Atomic *a, Mesh *maxmesh)
 		maxmesh->faces[i].setSmGroup(0);
 		maxmesh->faces[i].setMatID(g->triangles[i].matId);
 		maxmesh->faces[i].setEdgeVisFlags(1, 1, 1);
+	}
+
+	if(explicitNormals && g->flags & rw::Geometry::NORMALS){
+		for(int32 i = 0; i < g->numVertices; i++){
+			int j = findFirstVertex(gnorms, g->numVertices, &gnorms[i]);
+			assert(j >= 0);
+			newind[i] = j;
+		}
+		maxmesh->SpecifyNormals();
+		MeshNormalSpec *normalSpec = maxmesh->GetSpecifiedNormals();
+		normalSpec->ClearNormals();
+		normalSpec->SetNumNormals(g->numVertices);
+		for(int32 i = 0; i < g->numTriangles; i++){
+			int j = newind[i];
+			maxvert[0] = gnorms[j].x;
+			maxvert[1] = gnorms[j].y;
+			maxvert[2] = gnorms[j].z;
+			normalSpec->Normal(i) = maxvert;
+			normalSpec->SetNormalExplicit(i, true);
+		}
+		normalSpec->SetNumFaces(g->numTriangles);
+		MeshNormalFace *faces = normalSpec->GetFaceArray();
+		for(int32 i = 0; i < g->numTriangles; i++){
+			faces[i].SpecifyAll();
+			faces[i].SetNormalID(0, newind[g->triangles[i].v[0]]);
+			faces[i].SetNormalID(1, newind[g->triangles[i].v[1]]);
+			faces[i].SetNormalID(2, newind[g->triangles[i].v[2]]);
+		}
 	}
 
 	for(int k = 0; k < g->numTexCoordSets; k++){
@@ -971,6 +1001,7 @@ ImportDlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 		DLSetWindowLongPtr(hWnd, lParam); 
 		CenterWindow(hWnd, GetParent(hWnd)); 
 		CheckDlgButton(hWnd, IDC_CONVAXIS, DFFImport::convertHierarchy);
+		CheckDlgButton(hWnd, IDC_EXPLNORM, DFFImport::explicitNormals);
 		CheckDlgButton(hWnd, IDC_AUTOSMOOTH, DFFImport::autoSmooth);
 
 		spin = GetISpinner(GetDlgItem(hWnd, IDC_ANGLESPIN));
@@ -984,6 +1015,7 @@ ImportDlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 		switch(LOWORD(wParam)){
 		case IDOK:
 			DFFImport::convertHierarchy = IsDlgButtonChecked(hWnd, IDC_CONVAXIS);
+			DFFImport::explicitNormals = IsDlgButtonChecked(hWnd, IDC_EXPLNORM);
 			DFFImport::autoSmooth = IsDlgButtonChecked(hWnd, IDC_AUTOSMOOTH);
 
 			spin = GetISpinner(GetDlgItem(hWnd, IDC_ANGLESPIN));

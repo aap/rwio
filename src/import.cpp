@@ -328,7 +328,7 @@ DFFImport::makeMesh(rw::Atomic *a, Mesh *maxmesh)
 		MeshNormalSpec *normalSpec = maxmesh->GetSpecifiedNormals();
 		normalSpec->ClearNormals();
 		normalSpec->SetNumNormals(g->numVertices);
-		for(int32 i = 0; i < g->numTriangles; i++){
+		for(int32 i = 0; i < g->numVertices; i++){
 			int j = newind[i];
 			maxvert[0] = gnorms[j].x;
 			maxvert[1] = gnorms[j].y;
@@ -580,23 +580,102 @@ getChildIndex(rw::Frame *child)
 
 //#define USE_IMPNODES 0
 
-BOOL
-DFFImport::dffFileRead(const TCHAR *filename)
+/*
+void
+dumpUserData(rw::UserDataArray *ar)
+{
+	int i;
+	lprintf(_T("name: %s\n"), ar->name);
+	for(i = 0; i < ar->numElements; i++){
+		switch(ar->datatype){
+		case rw::USERDATAINT:
+			lprintf(_T("	%d\n"), ar->getInt(i));
+			break;
+		case rw::USERDATAFLOAT:
+			lprintf(_T("	%f\n"), ar->getFloat(i));
+			break;
+		case rw::USERDATASTRING:
+			lprintf(_T("	%s\n"), ar->getString(i));
+			break;
+		}
+	}
+}
+
+static rw::Frame*
+dumpFrameUserDataCB(rw::Frame *f, void*)
 {
 	using namespace rw;
+	int32 i;
+	UserDataArray *ar;
+	int32 n = UserDataArray::frameGetCount(f);
+	for(i = 0; i < n; i++){
+		ar = UserDataArray::frameGet(f, i);
+		dumpUserData(ar);
+	}
+	f->forAllChildren(dumpFrameUserDataCB, nil);
+	return f;
+}
 
+void
+dumpUserData(rw::Clump *clump)
+{
+	lprintf(_T("Frames\n"));
+	dumpFrameUserDataCB(clump->getFrame(), nil);
+}
+*/
+
+void
+attachBones(ISkinImportData *skinImp, INode *node)
+{
+	int i, n;
+	skinImp->AddBoneEx(node, true);
+	n = node->NumberOfChildren();
+	for(i = 0; i < n; i++)
+		attachBones(skinImp, node->GetChildNode(i));
+}
+
+char*
+getFrameUserName(rw::Frame *f)
+{
+	using namespace rw;
+	int32 i;
+	UserDataArray *ar;
+	int32 n = UserDataArray::frameGetCount(f);
+	for(i = 0; i < n; i++){
+		ar = UserDataArray::frameGet(f, i);
+		if(strcmp(ar->name, "name") == 0 && ar->datatype == rw::USERDATASTRING)
+			return ar->getString(0);
+	}
+	return nil;
+}
+
+char*
+getFrameName(rw::Frame *f)
+{
+	char *name;
+	name = gta::getNodeName(f);
+	if(name[0] == '\0')
+		return getFrameUserName(f);
+	else
+		return name;
+}
+
+static rw::Clump*
+readClump(const TCHAR *filename)
+{
+	using namespace rw;
 	StreamFile in;
 	Clump *c;
 
 #ifdef _UNICODE
 	char path[MAX_PATH];
 	wcstombs(path, filename, MAX_PATH);
-	if(in.open(path, "rb") == NULL)
+	if(in.open(path, "rb") == nil)
 #else
-	if(in.open(filename, "rb") == NULL)
+	if(in.open(filename, "rb") == nil)
 #endif
-		return 0;
-	currentUVAnimDictionary = NULL;
+		return nil;
+	currentUVAnimDictionary = nil;
 	TexDictionary::setCurrent(TexDictionary::create());
 	debugFile = (char*)filename;
 	ChunkHeaderInfo header;
@@ -608,24 +687,44 @@ DFFImport::dffFileRead(const TCHAR *filename)
 	}
 	if(header.type != ID_CLUMP){
 		in.close();
-		return 0;
+		return nil;
 	}
 	c = Clump::streamRead(&in);
 	in.close();
-	if(c == NULL)
-		return 0;
+	if(c == nil)
+		return nil;
 
+	FORLIST(lnk, c->atomics)
+		gta::attachCustomPipelines(rw::Atomic::fromClump(lnk));	// attach xbox pipelines, which we want to uninstance
 	int32 platform = findPlatform(c);
 	if(platform){
 		rw::platform = platform;
 		switchPipes(c, platform);
 	}
-
 	FORLIST(lnk, c->atomics){
 		Atomic *a = Atomic::fromClump(lnk);
 		a->uninstance();
 		ps2::unconvertADC(a->geometry);
 	}
+	return c;
+}
+
+BOOL
+DFFImport::dffFileRead(const TCHAR *filename)
+{
+	using namespace rw;
+
+	struct SkinNodeInfo {
+		INode *node;
+		Atomic *atomic;
+		int boneIdx;
+	};
+
+	Clump *c = readClump(filename);
+	if(c == nil)
+		return 0;
+
+	//dumpUserData(c);
 
 
 	//
@@ -637,17 +736,18 @@ DFFImport::dffFileRead(const TCHAR *filename)
 	Frame **flist = new Frame*[numFrames];
 	makeFrameList(c->getFrame(), flist);
 
+	int numAtomics = c->countAtomics();
+	int numSkinned = 0;
+
 	HAnimHierarchy *hier = HAnimHierarchy::find(c->getFrame());
 	if(hier)
 		hier->attach();
-	int numAtomics = c->countAtomics();
-	INode **skinNodes = nil;
-	Atomic **skinAtomics = nil;
+
+	SkinNodeInfo *skinInfo = nil;
 	if(numAtomics > 0){
-		skinNodes = new INode*[numAtomics];
-		skinAtomics = new Atomic*[numAtomics];
+		skinInfo = new SkinNodeInfo[numAtomics];
+		memset(skinInfo, 0, sizeof(SkinNodeInfo)*numAtomics);
 	}
-	int numSkinned = 0;
 
 	INode *bones[256];
 	memset(bones, 0, sizeof(bones));
@@ -698,25 +798,30 @@ DFFImport::dffFileRead(const TCHAR *filename)
 #else
 		node->SetNodeTM(t, tm);
 #endif
-		int isbone = 0;
 
 		// HAnim
+		int boneIdx = 0;	// default to hierarchy root, skinned geometry may be above
 		if(hier){
 			HAnimData *hanim = HAnimData::get(f);
+			node->SetUserPropInt(_T("tag"), hanim->id);
 			if(hanim->id >= 0){
-				isbone = 1;
-				node->SetUserPropInt(_T("tag"), hanim->id);
-				bones[hier->getIndex(hanim->id)] = node;
+				// In theory getting index by id should work, but I've seen
+				// files where an id was used more than once. hier->attach()
+				// does some magic that causes the same frame not to be attached
+				// to multiple nodes. Then we can use getIndex(Frame*), fun!
+
+				// Doesn't always works: bones[hier->getIndex(hanim->id)] = node;
+				boneIdx = hier->getIndex(f);
+				bones[boneIdx] = node;
 			}
 		}
 
 		if(f->getParent() && getNumChildren(f->getParent()) > 1)
 			node->SetUserPropInt(_T("childNum"), getChildIndex(f));
 
-		// GTA Node name
-		char *name = gta::getNodeName(f);
+		char *name = getFrameName(f);
 		char maxname[32];
-		if(name[0]){
+		if(name){
 			if(DFFImport::prepend){
 				maxname[0] = '!';
 				maxname[1] = '\0';
@@ -764,10 +869,12 @@ DFFImport::dffFileRead(const TCHAR *filename)
 					skinNode->SetNodeTM(t, node->GetNodeTM(t));
 #endif
 					makeMaterials(a, skinNode);
-					skinAtomics[numSkinned] = a;
-					skinNodes[numSkinned] = skinNode;
+					skinInfo[numSkinned].atomic = a;
+					skinInfo[numSkinned].node = skinNode;
+					skinInfo[numSkinned].boneIdx = boneIdx;
 					numSkinned++;
 				}else{
+					assert(!hasObject);
 #ifdef USE_IMPNODES
 					impnode->Reference(tri);
 #else
@@ -775,9 +882,9 @@ DFFImport::dffFileRead(const TCHAR *filename)
 					hasObject = 1;
 #endif
 					makeMaterials(a, node);
-					break;
 				}
 			}else if(obj->object.type == rw::Light::ID){
+				assert(!hasObject);
 				rw::Light *l = (rw::Light*)obj;
 				int maxtype;
 				int type = l->getType();
@@ -816,8 +923,8 @@ DFFImport::dffFileRead(const TCHAR *filename)
 				ifc->AddLightToScene(node);
 				gl->Enable(TRUE);
 				flipz = 1;
-				break;
 			}else if(obj->object.type == rw::Camera::ID){
+				assert(!hasObject);
 				rw::Camera *c = (rw::Camera*)obj;
 				GenCamera *gc = impifc->CreateCameraObject(c->projection == 1 ? FREE_CAMERA : PARALLEL_CAMERA);
 #ifdef USE_IMPNODES
@@ -832,7 +939,6 @@ DFFImport::dffFileRead(const TCHAR *filename)
 				gc->SetClipDist(t, CAM_YON_CLIP, c->farPlane);
 				gc->Enable(TRUE);
 				flipz = 1;
-				break;
 			}
 		}
 #ifdef USE_IMPNODES
@@ -894,7 +1000,7 @@ DFFImport::dffFileRead(const TCHAR *filename)
 		tm.IdentityMatrix();
 		rootnode->Rotate(t, tm, aa);		// ImpNode crash
 		for(int i = 0; i < numSkinned; i++)
-			skinNodes[i]->Rotate(t, tm, aa);	// ImpNode crash
+			skinInfo[i].node->Rotate(t, tm, aa);	// ImpNode crash
 	}
 	// Remember whether this was a biped for exporting
 	if(this->isBiped && rootnode->NumberOfChildren() == 1)
@@ -904,26 +1010,34 @@ DFFImport::dffFileRead(const TCHAR *filename)
 	// Skin
 	//
 
+	// Check that we have all nodes and display dummies as old-style bones
+	if(numSkinned)
+		for(int j = 0; j < hier->numNodes; j++){
+			if(bones[j] == NULL){
+				lprintf(_T("Error: bone %d missing\n"), j);
+				goto noskin;
+			}
+			::Object *obj = bones[j]->EvalWorldState(0).obj;
+			if(obj && obj->SuperClassID() == HELPER_CLASS_ID && obj->ClassID() == Class_ID(DUMMY_CLASS_ID, 0)){
+				bones[j]->ShowBone(2);
+				bones[j]->SetWireColor(0xFF00FFFF);
+			}
+		}
+
+
 	for(int i = 0; i < numSkinned && hier; i++){
-		INode *skinNode = skinNodes[i];
-		Skin *rwskin = getSkin(skinAtomics[i]);
+		INode *skinNode = skinInfo[i].node;
+		Skin *rwskin = getSkin(skinInfo[i].atomic);
 		if(rwskin->numBones != hier->numNodes){
 			lprintf(_T("number of bones doesn't match hierarchy\n"));
 			goto noskin;
 		}
-		for(int j = 0; j < hier->numNodes; j++){
-			if(bones[j] == NULL){
-				lprintf(_T("bone missing\n"));
-				goto noskin;
-			}
-			bones[j]->ShowBone(2);
-			bones[j]->SetWireColor(0xFF00FFFF);
-		}
 		Modifier *skin = (Modifier*)ifc->CreateInstance(SClass_ID(OSM_CLASS_ID), SKIN_CLASSID);
 		ISkinImportData *skinImp = (ISkinImportData*)skin->GetInterface(I_SKINIMPORTDATA);
 		GetCOREInterface7()->AddModifier(*skinNode, *skin);
-		for(int j = 0; j < hier->numNodes; j++)
-			skinImp->AddBoneEx(bones[j], true);
+
+		attachBones(skinImp, bones[skinInfo[i].boneIdx]);
+
 		// Assigning weights becomes a bit complicated because
 		// we deleted isolated vertices.
 		Tab<::INode*> bt;
@@ -938,7 +1052,7 @@ DFFImport::dffFileRead(const TCHAR *filename)
 		int numVerts = maxmesh->getNumVerts();
 		for(int j = 0; j < numVerts; j++){
 			Point3 pos = maxmesh->getVert(j);
-			int idx = findVertex(skinAtomics[i]->geometry, &pos);
+			int idx = findVertex(skinInfo[i].atomic->geometry, &pos);
 			assert(idx >= 0);
 			w = &rwskin->weights[idx*4];
 			ix = &rwskin->indices[idx*4];
@@ -963,16 +1077,15 @@ noskin:
 
 //	printHier(realroot, 0);
 //	for(int i = 0; i < numSkinned; i++)
-//		printHier(skinNodes[i], 0);
+//		printHier(skinInfo[i].node, 0);
 
 	// save nodes for selection
 	saveNodes(realroot);
 	for(int i = 0; i < numSkinned; i++)
-		saveNodes(skinNodes[i]);
+		saveNodes(skinInfo[i].node);
 
 	impifc->RedrawViews();
-	delete[] skinAtomics;
-	delete[] skinNodes;
+	delete[] skinInfo;
 	delete[] nodelist;
 #ifdef USE_IMPNODES
 	delete[] impnodelist;

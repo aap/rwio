@@ -134,7 +134,7 @@ private:
 
 	INode *rootnode;
 
-	INode *skinNodes[5];
+	INode *skinNodes[256];
 	int numSkins;
 
 public:

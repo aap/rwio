@@ -537,7 +537,7 @@ DFFExport::writeDFF(const TCHAR *filename)
 		this->maxNodes = countNodes(rootnode);
 		//lprintf("number of nodes: %d\n", this->maxNodes);
 		this->nodearray = new RWNode[this->maxNodes];
-		this->nextId = 65535;
+		this->nextId = 2000;
 		this->inHierarchy = 1;
 	}
 

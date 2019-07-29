@@ -136,7 +136,7 @@ private:
 
 	INode *rootnode;
 
-	INode *skinNodes[20];	// TODO: don't allocate this statically
+	INode *skinNodes[256];
 	int numSkins;
 
 public:

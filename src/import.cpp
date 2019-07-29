@@ -527,7 +527,7 @@ DFFImport::axesHeuristics(rw::Frame *f)
 	// to improve the guess (who uses bipeds without a hierarchy?).
 	rw::Frame *child = f->child;
 	this->isBiped = 0;
-	if(child && child->next == NULL)
+	if(child && child->next == nil)
 		this->isBiped = rw::equal(child->matrix.right, bipmat.right) &&
 			rw::equal(child->matrix.at, bipmat.at) &&
 			rw::equal(child->matrix.up, bipmat.up) &&
@@ -562,6 +562,7 @@ getNumChildren(rw::Frame *f)
 	return n;
 }
 
+// return which child of the parent this frame is
 static int
 getChildIndex(rw::Frame *child)
 {
@@ -575,6 +576,51 @@ getChildIndex(rw::Frame *child)
 		n++;
 	}
 	// cannot happen
+	return -1;
+}
+
+static int
+cmpint(const void *a, const void *b)
+{
+	int *ia = (int*)a;
+	int *ib = (int*)b;
+	return *ia - *ib;
+}
+
+// return which child of the parent this frame is, based oh hanim hierarchy
+// return -1 if not all children have an id
+static int
+getHierChildIndex(rw::Frame *child, rw::HAnimHierarchy *hier)
+{
+	int i, n;
+	int thisIndex;
+	int *indices;
+	rw::Frame *c;
+	if(child->getParent() == nil)
+		return 0;
+
+	indices = new int[getNumChildren(child->getParent())];
+
+	n = 0;
+	thisIndex = -1;
+	for(c = child->getParent()->child; c; c = c->next){
+		rw::HAnimData *hanim = rw::HAnimData::get(c);
+		if(hanim->id < 0)
+			goto err;
+		indices[n] = hier->getIndex(hanim->id);
+		if(c == child)
+			thisIndex = indices[n];
+		n++;
+	}
+	assert(thisIndex >= 0);
+	qsort(indices, n, sizeof(int), cmpint);
+	for(i = 0; i < n; i++)
+		if(indices[i] == thisIndex){
+			delete[] indices;
+			return i;
+		}
+err:
+	delete[] indices;
 	return -1;
 }
 
@@ -762,6 +808,7 @@ DFFImport::dffFileRead(const TCHAR *filename)
 #ifdef USE_IMPNODES
 	ImpNode **impnodelist = new ImpNode*[numFrames];
 #endif
+	INode *rootnode = nil;
 	for(int j = 0; j < numFrames; j++){
 		Frame *f = flist[j];
 
@@ -777,10 +824,16 @@ DFFImport::dffFileRead(const TCHAR *filename)
 		::Object *obj = (::Object*)ifc->CreateInstance(HELPER_CLASS_ID, Class_ID(DUMMY_CLASS_ID, 0));
 		node = ifc->CreateObjectNode(obj);
 #endif
+		if(j == 0){
+			assert(f->getParent() == nil);
+			rootnode = node;
+		}
+
 		nodelist[j] = node;
 		::Matrix3 tm;
 		MRow *m = tm.GetAddr();
 		rw::Matrix *rwm = f->getLTM();
+
 		m[0][0] = rwm->right.x;
 		m[0][1] = rwm->right.y;
 		m[0][2] = rwm->right.z;
@@ -816,8 +869,18 @@ DFFImport::dffFileRead(const TCHAR *filename)
 			}
 		}
 
-		if(f->getParent() && getNumChildren(f->getParent()) > 1)
-			node->SetUserPropInt(_T("childNum"), getChildIndex(f));
+		if(hier){
+			if(f->getParent() && getNumChildren(f->getParent()) > 1){
+				int childNum = getHierChildIndex(f, hier);
+				if(childNum < 0)
+					lprintf(_T("warning: couldn't assign child number by hierarchy\n"));
+				else
+					node->SetUserPropInt(_T("childNum"), childNum);
+			}
+		}else{
+			if(f->getParent() && getNumChildren(f->getParent()) > 1)
+				node->SetUserPropInt(_T("childNum"), getChildIndex(f));
+		}
 
 		char *name = getFrameName(f);
 		char maxname[32];
@@ -854,19 +917,26 @@ DFFImport::dffFileRead(const TCHAR *filename)
 				TriObject *tri = CreateNewTriObject();
 				if(!tri) return 0;
 				::Mesh *msh = &tri->GetMesh();
-				makeMesh(a, msh);
 				// make a new node outside the hierarchy for skinned objects
 				if(getSkin(a)){
+					// Transform vertices to root space, but remove world transform
+					rw::Matrix tmp, rootspace;
+					rw::Matrix::invert(&tmp, f->root->getLTM());	// inverse world
+					rw::Matrix::mult(&rootspace, f->getLTM(), &tmp);
+					transformGeometry(a->geometry, &rootspace);
+
+					makeMesh(a, msh);
+
 					INode *skinNode;
 #ifdef USE_IMPNODES
 					ImpNode *impnode = impifc->CreateNode();
 					impifc->AddNodeToScene(impnode);
 					impnode->Reference(tri);
 					skinNode = impnode->GetINode();
-					impnode->SetTransform(t, node->GetNodeTM(t));
+//					impnode->SetTransform(t, node->GetNodeTM(t));
 #else
 					skinNode = ifc->CreateObjectNode(tri);
-					skinNode->SetNodeTM(t, node->GetNodeTM(t));
+					skinNode->SetNodeTM(t, rootnode->GetNodeTM(t));
 #endif
 					makeMaterials(a, skinNode);
 					skinInfo[numSkinned].atomic = a;
@@ -874,6 +944,7 @@ DFFImport::dffFileRead(const TCHAR *filename)
 					skinInfo[numSkinned].boneIdx = boneIdx;
 					numSkinned++;
 				}else{
+					makeMesh(a, msh);
 					assert(!hasObject);
 #ifdef USE_IMPNODES
 					impnode->Reference(tri);
@@ -978,12 +1049,10 @@ DFFImport::dffFileRead(const TCHAR *filename)
 #endif
 
 	/* build hierarchy */
-	INode *rootnode = NULL;
 	for(int j = 0; j < numFrames; j++){
-		if(flist[j]->getParent() == NULL){
-			rootnode = nodelist[j];
+		if(flist[j]->getParent() == nil)
 			continue;
-		}
+
 		int frm = findPointer(flist[j]->getParent(), (void**)flist, numFrames);
 		// keepTM is broken for ImpNodes so do it manually
 		::Matrix3 tm = nodelist[j]->GetNodeTM(0);
@@ -1013,7 +1082,7 @@ DFFImport::dffFileRead(const TCHAR *filename)
 	// Check that we have all nodes and display dummies as old-style bones
 	if(numSkinned)
 		for(int j = 0; j < hier->numNodes; j++){
-			if(bones[j] == NULL){
+			if(bones[j] == nil){
 				lprintf(_T("Error: bone %d missing\n"), j);
 				goto noskin;
 			}
@@ -1048,7 +1117,7 @@ DFFImport::dffFileRead(const TCHAR *filename)
 		float *w;
 		uint8 *ix;
 		::Mesh *maxmesh = getMesh(skinNode, t);
-		assert(maxmesh != NULL);
+		assert(maxmesh != nil);
 		int numVerts = maxmesh->getNumVerts();
 		for(int j = 0; j < numVerts; j++){
 			Point3 pos = maxmesh->getVert(j);

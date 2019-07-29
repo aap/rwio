@@ -123,6 +123,7 @@ dumpScene(INode *node, int ind)
 		dumpScene(node->GetChildNode(i), ind+1);
 }
 
+// Find node highest up in hierarchy that isn't the scene root
 static INode*
 getRootOf(INode *node)
 {
@@ -217,6 +218,15 @@ DFFExport::findSkinnedGeometry(INode *root)
 	}
 }
 
+INode*
+findSkinRootBone(INode *node)
+{
+	Modifier *mod = findModifier(node, SKIN_CLASSID);
+	if(mod)
+		return getFirstBone(mod);
+	return nil;
+}
+
 void
 DFFExport::convertLight(rw::Frame *frame, rw::Clump *clump, INode *node)
 {
@@ -274,7 +284,7 @@ DFFExport::convertCamera(rw::Frame *frame, rw::Clump *clump, INode *node)
 	clump->addCamera(rwcam);
 }
 
-static void
+void
 transformGeometry(rw::Geometry *geo, rw::Matrix *mat)
 {
 	rw::Matrix inv, nmat;
@@ -287,19 +297,6 @@ transformGeometry(rw::Geometry *geo, rw::Matrix *mat)
 	rw::V3d::transformPoints(verts, verts, geo->numVertices, mat);
 	if(norms)
 		rw::V3d::transformVectors(norms, norms, geo->numVertices, &nmat);
-}
-
-// Transform the geometry data of node so that it will
-// be right when attached to frame.
-static void
-transformSkinGeo(rw::Geometry *geo, rw::Frame *frame, rw::Frame *root)
-{
-	rw::Matrix mat;
-	// this is probably wrong
-	if(frame->getParent()){
-		rw::Matrix::invert(&mat, &root->matrix);
-		transformGeometry(geo, &mat);
-	}
 }
 
 // frame is the frame the atomic will be attached to.
@@ -325,7 +322,13 @@ DFFExport::convertAtomic(rw::Frame *frame, rw::Frame *root, rw::Clump *clump, IN
 	Modifier *mod = findModifier(node, SKIN_CLASSID);
 	if(mod){
 		convertSkin(geo, frame, node, mod, map);
-		transformSkinGeo(geo, frame, root);
+
+		// Transform the geometry data of node so that it will
+		// be right when attached to frame.
+		rw::Matrix mat, tmp;
+		rw::Matrix::invert(&tmp, frame->getLTM());
+		rw::Matrix::mult(&mat, frame->root->getLTM(), &tmp);
+		transformGeometry(geo, &mat);
 	}
 	delete[] map;
 	// do it after geometry transformations
@@ -406,6 +409,16 @@ sortByChildNum(const void *a, const void *b)
 	return na->childNum - nb->childNum;
 }
 
+rw::Frame*
+DFFExport::findFrameOfNode(INode *node)
+{
+	int i;
+	for(i = 0; i < numNodes; i++)
+		if(nodearray[i].node == node)
+			return nodearray[i].frame;
+	return nil;
+}
+
 void
 DFFExport::convertNode(rw::Clump *clump, rw::Frame *frame, INode *node, int flip)
 {
@@ -466,6 +479,8 @@ DFFExport::convertNode(rw::Clump *clump, rw::Frame *frame, INode *node, int flip
 		n->frame = frame;
 		n->node = node;
 		oldNumNodes = this->numNodes;
+//	}else{
+//		lprintf(_T("skipping frame %s as node\n"), gta::getNodeName(frame));
 	}
 
 	// Sort child nodes by ID
@@ -490,16 +505,18 @@ DFFExport::convertNode(rw::Clump *clump, rw::Frame *frame, INode *node, int flip
 	}
 	delete[] children;
 
-	this->inHierarchy = wasInHierarchy;
 	if(this->inHierarchy){
 		// no children -> POP
 		if(oldNumNodes == this->numNodes)
 			n->flags |= HAnimHierarchy::POP;
 		// last child has no PUSH
-		else
+		else{
+			assert(this->lastChild >= 0);
 			this->nodearray[this->lastChild].flags &= ~HAnimHierarchy::PUSH;
+		}
 		this->lastChild = thisIndex;
 	}
+	this->inHierarchy = wasInHierarchy;
 }
 
 BOOL
@@ -509,6 +526,7 @@ DFFExport::writeDFF(const TCHAR *filename)
 
 	rw::platform = PLATFORM_NULL;
 
+	// Find root of the node hierarchy we're exporting
 	int numSelected = this->ifc->GetSelNodeCount();
 	INode *rootnode = NULL;
 	for(int i = 0; i < numSelected; i++){
@@ -524,6 +542,7 @@ DFFExport::writeDFF(const TCHAR *filename)
 	this->rootnode = rootnode;
 
 	Clump *clump = Clump::create();
+	// actual root of the hierarchy, there may be a dummy above this one
 	Frame *rootFrame = Frame::create();
 	clump->setFrame(rootFrame);
 
@@ -539,6 +558,7 @@ DFFExport::writeDFF(const TCHAR *filename)
 		this->nodearray = new RWNode[this->maxNodes];
 		this->nextId = 2000;
 		this->inHierarchy = 1;
+		this->lastChild = -1;
 	}
 
 	this->numSkins = 0;
@@ -596,9 +616,12 @@ DFFExport::writeDFF(const TCHAR *filename)
 	// Create skinned geometries after frame hierarchy is done.
 	if(this->exportSkin){
 		findSkinnedGeometry(this->ifc->GetRootNode());
-		Frame *f = DFFExport::version < 0x35000 ? clump->getFrame() : rootFrame;
-		for(int i = 0; i < this->numSkins; i++)
+//		Frame *f = DFFExport::version < 0x35000 ? clump->getFrame() : rootFrame;
+		for(int i = 0; i < this->numSkins; i++){
+			Frame *f = DFFExport::version < 0x35000 ? clump->getFrame() : findFrameOfNode(findSkinRootBone(this->skinNodes[i]));
+			assert(f != nil);
 			convertAtomic(f, rootFrame, clump, this->skinNodes[i]);
+		}
 	}
 
 

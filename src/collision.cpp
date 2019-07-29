@@ -81,24 +81,73 @@ convertBox(CColBox *colbox, INode *boxnode)
 	colbox->piece = getPieceType(pb);
 }
 
+// Calculate bounding volumes from bounding box of selected node
+// and collision volumes inside model
 void
 calculateBounds(CColModel *colmodel, INode *root)
 {
-	Box3 box;
+	Box3 selbox;
 	Interface *ifc = GetCOREInterface();
 	Matrix3 trans = root->GetNodeTM(0);
 	root->SetNodeTM(0, IdentityTM());
 	ifc->SelectNode(root);
-	ifc->GetSelectionWorldBox(0, box);
+	ifc->GetSelectionWorldBox(0, selbox);
 	root->SetNodeTM(0, trans);
-	Point3 max = box.Max();
-	Point3 min = box.Min();
+	Point3 selmax = selbox.Max();
+	Point3 selmin = selbox.Min();
+
+/*
 	Point3 center = box.Center();
 	colmodel->boundingBox.min.set(min.x, min.y, min.z);
 	colmodel->boundingBox.max.set(max.x, max.y, max.z);
 	Point3 dim = (max - min)/2;
 	colmodel->boundingSphere.radius = dim.Length();
 	colmodel->boundingSphere.center.set(center.x, center.y, center.z);
+*/
+	int i;
+	rw::BBox box;
+	rw::V3d v;
+
+	// initialize with selection box, because for some objects this is everything we have
+	rw::V3d points[2];
+	points[0].set(selmin.x, selmin.y, selmin.z);
+	points[1].set(selmax.x, selmax.y, selmax.z);
+	box.calculate(points, 2);
+
+	// Now the collision volumes
+	for(i = 0; i < colmodel->numSpheres; i++){
+		v.x = colmodel->spheres[i].center.x + colmodel->spheres[i].radius;
+		v.y = colmodel->spheres[i].center.y + colmodel->spheres[i].radius;
+		v.z = colmodel->spheres[i].center.z + colmodel->spheres[i].radius;
+		box.addPoint(&v);
+		v.x = colmodel->spheres[i].center.x - colmodel->spheres[i].radius;
+		v.y = colmodel->spheres[i].center.y - colmodel->spheres[i].radius;
+		v.z = colmodel->spheres[i].center.z - colmodel->spheres[i].radius;
+		box.addPoint(&v);
+	}
+	for(i = 0; i < colmodel->numBoxes; i++){
+		box.addPoint(&colmodel->boxes[i].min);
+		box.addPoint(&colmodel->boxes[i].max);
+	}
+	for(i = 0; i < colmodel->numLines; i++){
+		box.addPoint(&colmodel->lines[i].p0);
+		box.addPoint(&colmodel->lines[i].p1);
+	}
+	for(i = 0; i < colmodel->numTriangles; i++){
+		v = colmodel->vertices[colmodel->triangles[i].a];
+		box.addPoint(&v);
+		v = colmodel->vertices[colmodel->triangles[i].b];
+		box.addPoint(&v);
+		v = colmodel->vertices[colmodel->triangles[i].c];
+		box.addPoint(&v);
+	}
+
+	colmodel->boundingBox.min = box.inf;
+	colmodel->boundingBox.max = box.sup;
+
+	colmodel->boundingSphere.radius = rw::length(rw::scale(rw::sub(box.sup, box.inf), 0.5f));
+	colmodel->boundingSphere.center = rw::scale(rw::add(box.sup, box.inf), 0.5f);
+
 }
 
 void

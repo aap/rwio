@@ -13,6 +13,7 @@ initRW(void)
 	rw::version = 0x35000;
 	rw::platform = rw::PLATFORM_D3D8;
 	//rw::platform = rw::PLATFORM_PS2;
+	rw::streamAppendFrames = 1;
 	rw::Engine::init();
 	gta::attachPlugins();
 	rw::Engine::open();

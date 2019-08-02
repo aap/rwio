@@ -407,15 +407,14 @@ DFFExport::convertSkin(rw::Geometry *geo, rw::Frame *frame, INode *node, Modifie
 	using namespace rw;
 
 	ISkin *skin = (ISkin*)mod->GetInterface(I_SKIN);
+
 	int numBones = skin->GetNumBones();
-	if(numBones != this->numNodes){
-		lprintf(_T("Error: unequal number of bones and nodes\n"));
-		return;
-	}
+	// NB: numBones need not be equal to numNodes!
+
 	rw::Skin *rwskin = new rw::Skin;
 	rw::Skin::set(geo, rwskin);
 	//lprintf("BONES: %d %d\n", skin->GetNumBones(), skin->GetNumBonesFlat());
-	rwskin->init(numBones, numBones, geo->numVertices);
+	rwskin->init(this->numNodes, numBones, geo->numVertices);
 	ISkinContextData *skindata = skin->GetContextInterface(node);
 	float *weights = rwskin->weights;
 	uint8 *indices = rwskin->indices;
@@ -431,7 +430,7 @@ DFFExport::convertSkin(rw::Geometry *geo, rw::Frame *frame, INode *node, Modifie
 	int *bonemap = new int[numBones];
 	for(int i = 0; i < numBones; i++){
 		INode *bone = skin->GetBone(i);
-		for(int j = 0; j < numBones; j++)
+		for(int j = 0; j < this->numNodes; j++)
 			if(this->nodearray[j].node == bone){
 				bonemap[i] = j;
 				break;
@@ -453,13 +452,10 @@ DFFExport::convertSkin(rw::Geometry *geo, rw::Frame *frame, INode *node, Modifie
 		tri->DeleteMe();
 
 	/* calculate inverse bone matrices */
-	rw::Matrix rootinv, tmp;
-	RWNode *n = &this->nodearray[0];
-	rw::Matrix::invert(&rootinv, frame->getLTM());
-	for(int i = 0; i < numBones; i++){
-		n = &this->nodearray[i];
-		rw::Matrix::mult(&tmp, &rootinv, n->frame->getLTM());
-		rw::Matrix::invert((rw::Matrix*)&rwskin->inverseMatrices[i*16], &tmp);
+	rw::Matrix tmp;
+	for(int i = 0; i < this->numNodes; i++){
+		rw::Matrix::invert(&tmp, this->nodearray[i].frame->getLTM());
+		rw::Matrix::mult((rw::Matrix*)&rwskin->inverseMatrices[i*16], frame->getLTM(), &tmp);
 	}
 
 	rwskin->findNumWeights(geo->numVertices);

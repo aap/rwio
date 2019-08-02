@@ -56,6 +56,8 @@
 Matrix3 getLocalMatrix(INode *node);
 Matrix3 getObjectToLocalMatrix(INode *node);
 
+void transformGeometry(rw::Geometry *geo, rw::Matrix *mat);
+
 enum RwMat {
 	mat_color = 0, mat_coloralpha,
 	mat_sp_ambient, mat_sp_diffuse, mat_sp_specular,
@@ -134,7 +136,7 @@ private:
 
 	INode *rootnode;
 
-	INode *skinNodes[5];
+	INode *skinNodes[256];
 	int numSkins;
 
 public:
@@ -156,6 +158,7 @@ public:
 	void convertSkin(rw::Geometry *geo, rw::Frame *frame, INode *node, Modifier *mod, int *map);
 	rw::Geometry *convertGeometry(INode *node, int **vertexmap);
 	void findSkinnedGeometry(INode *root);
+	rw::Frame *findFrameOfNode(INode *node);
 	void convertAtomic(rw::Frame *frame, rw::Frame *root, rw::Clump *clump, INode *node);
 	void convertLight(rw::Frame *frame, rw::Clump *clump, INode *node);
 	void convertCamera(rw::Frame *frame, rw::Clump *clump, INode *node);

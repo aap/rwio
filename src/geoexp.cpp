@@ -254,6 +254,9 @@ DFFExport::convertGeometry(INode *node, int **vertexmap)
 	int mask = 1;
 	int numTris = mesh->numFaces;
 	int numVertices = 0;
+	int prelitUDProp;
+	node->GetUserPropInt(_T("prelit"), prelitUDProp);
+
 	int32 flags = Geometry::POSITIONS;
 	if(exportTristrips)
 		flags |= Geometry::TRISTRIP;
@@ -263,7 +266,7 @@ DFFExport::convertGeometry(INode *node, int **vertexmap)
 		mask |= 0x10;
 		flags |= Geometry::NORMALS;
 	}
-	if(exportPrelit){
+	if(exportPrelit || prelitUDProp > 0) {
 		mask |= 0x100;
 		flags |= Geometry::PRELIT;
 	}

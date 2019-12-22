@@ -472,18 +472,24 @@ getBonePositions(rw::Skin *skin, rw::HAnimHierarchy *hier, Point3 *positions)
 	}
 }
 
+#define SQ(a) ((a)*(a))
+
 static int
 findVertex(rw::Geometry *g, Point3 *v)
 {
 	using namespace rw;
+
+	int closest = -1;
+	float dist = 9999999.9f;
 	V3d *verts = g->morphTargets[0].vertices;
 	for(int32 i = 0; i < g->numVertices; i++){
-		if(abs(verts[i].x-v->x) < 0.0001f &&
-		   abs(verts[i].y-v->y) < 0.0001f &&
-		   abs(verts[i].z-v->z) < 0.0001f)
-			return i;
+		float d = SQ(verts[i].x-v->x) + SQ(verts[i].y-v->y) + SQ(verts[i].z-v->z);
+		if(d < dist){
+			dist = d;
+			closest = i;
+		}
 	}
-	return -1;
+	return closest;
 }
 
 static ::Mesh*
@@ -1111,8 +1117,8 @@ DFFImport::dffFileRead(const TCHAR *filename)
 		// we deleted isolated vertices.
 		Tab<::INode*> bt;
 		Tab<float> wt;
-		bt.SetCount(4, 1);
-		wt.SetCount(4, 1);
+		bt.Resize(4);
+		wt.Resize(4);
 		skinNode->EvalWorldState(t);
 		float *w;
 		uint8 *ix;
@@ -1125,11 +1131,15 @@ DFFImport::dffFileRead(const TCHAR *filename)
 			assert(idx >= 0);
 			w = &rwskin->weights[idx*4];
 			ix = &rwskin->indices[idx*4];
+			bt.ZeroCount();
+			wt.ZeroCount();
 			for(int k = 0; k < 4; k++){
-				bt[k] = bones[ix[k]];
-				wt[k] = w[k];
+				if(w[k] > 0.0f){
+					bt.Append(1, &bones[ix[k]]);
+					wt.Append(1, &w[k]);
+				}
 			}
-			skinImp->AddWeights(skinNode, j, bt, wt);
+			BOOL res = skinImp->AddWeights(skinNode, j, bt, wt);
 		}
 	}
 

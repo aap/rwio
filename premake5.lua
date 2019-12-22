@@ -105,3 +105,7 @@ project "rwio2017"
 project "rwio2018"
 	maxsdk = "C:/Users/aap/src/maxsdk/3ds Max 2018 SDK/maxsdk/"
 	maxplugin2(maxsdk)
+
+project "rwio2020"
+	maxsdk = "C:/Users/aap/src/maxsdk/3ds Max 2020 SDK/maxsdk/"
+	maxplugin2(maxsdk)

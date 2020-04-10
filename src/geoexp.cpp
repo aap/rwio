@@ -254,7 +254,7 @@ DFFExport::convertGeometry(INode *node, int **vertexmap)
 	int mask = 1;
 	int numTris = mesh->numFaces;
 	int numVertices = 0;
-	int prelitUDProp;
+	int prelitUDProp = -1;
 	node->GetUserPropInt(_T("prelit"), prelitUDProp);
 
 	int32 flags = Geometry::POSITIONS;

@@ -16,8 +16,8 @@ initRW(void)
 	rw::streamAppendFrames = 1;
 	rw::Engine::init();
 	gta::attachPlugins();
-	rw::Engine::open();
-	rw::Engine::start(nil);
+	rw::Engine::open(nil);
+	rw::Engine::start();
 	rwInitialized = 1;
 	rw::Texture::setCreateDummies(1);
 	rw::Texture::setLoadTextures(0);

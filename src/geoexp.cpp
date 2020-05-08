@@ -219,8 +219,11 @@ convertMaterials(rw::Geometry *geo, INode *node)
 		mat->color.green = GetGValue(wire);
 		mat->color.blue = GetBValue(wire);
 	}else if(mtl->ClassID() == Class_ID(MULTI_CLASS_ID, 0)){
-		for(int i = 0; i < mtl->NumSubMtls(); i++)
-			geo->matList.appendMaterial(convertMaterial(mtl->GetSubMtl(i)));
+		for(int i = 0; i < mtl->NumSubMtls(); i++){
+			Mtl *submtl = mtl->GetSubMtl(i);
+			assert(submtl);	// TODO: figure out what's going on here
+			geo->matList.appendMaterial(convertMaterial(submtl));
+		}
 	}else
 		geo->matList.appendMaterial(convertMaterial(mtl));
 }
@@ -254,8 +257,9 @@ DFFExport::convertGeometry(INode *node, int **vertexmap)
 	int mask = 1;
 	int numTris = mesh->numFaces;
 	int numVertices = 0;
-	int prelitUDProp = -1;
-	node->GetUserPropInt(_T("prelit"), prelitUDProp);
+	int prelitUDProp;
+	if(!node->GetUserPropInt(_T("prelit"), prelitUDProp))
+		prelitUDProp = -1;
 
 	int32 flags = Geometry::POSITIONS;
 	if(exportTristrips)
@@ -267,6 +271,7 @@ DFFExport::convertGeometry(INode *node, int **vertexmap)
 		flags |= Geometry::NORMALS;
 	}
 	if(exportPrelit || prelitUDProp > 0) {
+lprintf(TEXT("exporting prelight\n"));
 		mask |= 0x100;
 		flags |= Geometry::PRELIT;
 	}

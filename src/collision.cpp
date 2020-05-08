@@ -302,12 +302,12 @@ COLExport::writeCOL1(const TCHAR *filename)
 	rw::uint8 *buf;
 	header.ident = COLL;
 	header.size = writeColModel(colmodel, &buf)+24;
-	stream.write(&header, 8);
+	stream.write8(&header, 8);
 	memset(outname, 0, 24);
 	strncpy(outname, colname, 24);
 	delete[] colname;
-	stream.write(outname, 24);
-	stream.write(buf, header.size-24);
+	stream.write8(outname, 24);
+	stream.write8(buf, header.size-24);
 	delete[] buf;
 	stream.close();
 	delete colmodel;

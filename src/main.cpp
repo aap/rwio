@@ -54,6 +54,9 @@ static Value *setNormals(Value *val) { DFFExport::exportNormals = val->to_int();
 static Value *getPrelight() { return Integer::intern(DFFExport::exportPrelit); }
 static Value *setPrelight(Value *val) { DFFExport::exportPrelit = val->to_int(); return val; }
 
+static Value *getTristrip() { return Integer::intern(DFFExport::exportTristrip); }
+static Value *setTristrip(Value *val) { DFFExport::exportTristrip = val->to_int(); return val; }
+
 static Value *getWorldSpace() { return Integer::intern(DFFExport::worldSpace); }
 static Value *setWorldSpace(Value *val) { DFFExport::worldSpace = val->to_int(); return val; }
 
@@ -108,6 +111,7 @@ initMaxscript(void)
 	define_struct_global(_T("lighting"), _T("dffExp"), getLighting, setLighting);
 	define_struct_global(_T("normals"), _T("dffExp"), getNormals, setNormals);
 	define_struct_global(_T("prelight"), _T("dffExp"), getPrelight, setPrelight);
+	define_struct_global(_T("tristrip"), _T("dffExp"), getTristrip, setTristrip);
 	define_struct_global(_T("worldSpace"), _T("dffExp"), getWorldSpace, setWorldSpace);
 	define_struct_global(_T("createHAnim"), _T("dffExp"), getCreateHAnim, setCreateHAnim);
 	define_struct_global(_T("skinning"), _T("dffExp"), getSkinning, setSkinning);

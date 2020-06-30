@@ -7,6 +7,7 @@
 #include <3dsmaxport.h>
 #include <stdmat.h>
 #include <iparamb2.h>
+#include <dummy.h>
 #include <iskin.h>
 #include <modstack.h>
 #include <icustattribcontainer.h>
@@ -91,7 +92,11 @@ public:
 	static int prepend;
 	static float smoothingAngle;
 	static int explicitNormals;
+	static int importStdMaterials;
+	static int fixKam;
 
+	Mtl *MakeGTAMaterial(rw::Material *m);
+	Mtl *MakeStdMaterial(rw::Material *m);
 	void makeMaterials(rw::Atomic *a, INode *inode);
 	void makeMesh(rw::Atomic *a, Mesh *maxmesh);
 	void axesHeuristics(rw::Frame *f);
@@ -144,6 +149,7 @@ public:
 	static int exportLit;
 	static int exportNormals;
 	static int exportPrelit;
+	static int exportTristrip;
 	// world space
 	static int worldSpace;
 	// animation

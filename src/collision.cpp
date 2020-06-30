@@ -24,8 +24,13 @@ int
 getSurface(IParamBlock2 *pb)
 {
 	Interval valid = FOREVER;
-	int surf;
-	pb->GetValue(0, 0, surf, valid);
+	int surf = 0;
+	for(int i = 0; i < pb->NumParams(); i++){
+		if(pb->GetLocalName(i) == MSTR(TEXT("surf"))){
+			pb->GetValue(i, 0, surf, valid);
+			break;
+		}
+	}
 	return surf;
 }
 
@@ -33,8 +38,12 @@ int
 getPieceType(IParamBlock2 *pb)
 {
 	Interval valid = FOREVER;
-	int piece;
-	pb->GetValue(1, 0, piece, valid);
+	int piece = 0;
+	for(int i = 0; i < pb->NumParams(); i++)
+		if(pb->GetLocalName(i) == MSTR(TEXT("piece"))){
+			pb->GetValue(i, 0, piece, valid);
+			break;
+		}
 	return piece;
 }
 

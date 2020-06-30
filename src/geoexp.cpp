@@ -1,7 +1,5 @@
 #include "dffimp.h"
 
-int exportTristrips = 0;	// TODO
-
 // stolen from RW
 static void
 GetFileName(char *outFileName, char *fullPathName)
@@ -250,6 +248,10 @@ DFFExport::convertGeometry(INode *node, int **vertexmap)
 
 	::Object *obj = node->EvalWorldState(0).obj;
 	TriObject *tri = (TriObject*)obj->ConvertToType(0, triObjectClassID);
+	// This happens with "Spray" objects for instance...
+	// TODO: figure out a better way of handling this
+	if(tri == nil)
+		return nil;
 	::Mesh *mesh = &tri->mesh;
 
 	//lprintf("geometry: %s\n", obj->GetObjectName());
@@ -262,7 +264,7 @@ DFFExport::convertGeometry(INode *node, int **vertexmap)
 		prelitUDProp = -1;
 
 	int32 flags = Geometry::POSITIONS;
-	if(exportTristrips)
+	if(exportTristrip)
 		flags |= Geometry::TRISTRIP;
 	if(exportLit)
 		flags |= Geometry::LIGHT;
@@ -271,7 +273,6 @@ DFFExport::convertGeometry(INode *node, int **vertexmap)
 		flags |= Geometry::NORMALS;
 	}
 	if(exportPrelit || prelitUDProp > 0) {
-lprintf(TEXT("exporting prelight\n"));
 		mask |= 0x100;
 		flags |= Geometry::PRELIT;
 	}

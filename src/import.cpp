@@ -5,6 +5,8 @@ int DFFImport::autoSmooth = 1;
 int DFFImport::prepend;
 float DFFImport::smoothingAngle = 45.0f;
 int DFFImport::explicitNormals = 0;
+int DFFImport::importStdMaterials = 0;
+int DFFImport::fixKam = 0;
 
 std::vector<INode*> DFFImport::lastImported;
 
@@ -104,8 +106,6 @@ makeTexture(rw::Texture *tex)
 	using namespace rw;
 	static MCHAR bmpname[MAX_PATH];
 	static MCHAR fullname[MAX_PATH];
-	static WCHAR fuckyou[MAX_PATH];
-	static char texname[MAX_PATH];
 
 	BitmapTex *bmtex;
 	if(tex == NULL)
@@ -119,16 +119,7 @@ makeTexture(rw::Texture *tex)
 #endif
 	makeTexturePath(bmpname, fullname);
 	bmtex->SetMapName(fullname);
-/*
-	strncpy(texname, tex->name, 32);
-	strcat(texname, ".tga");
-#ifdef _UNICODE
-	mbstowcs(fuckyou, texname, MAX_PATH);
-	bmtex->SetMapName(fuckyou);
-#else
-	bmtex->SetMapName(texname);
-#endif
-*/
+
 	switch(tex->filterAddressing & 0xFF){
 	case Texture::NEAREST:
 		bmtex->SetFilterType(FILTER_NADA);
@@ -159,6 +150,162 @@ makeTexture(rw::Texture *tex)
 	return bmtex;
 }
 
+Mtl*
+DFFImport::MakeGTAMaterial(rw::Material *m)
+{
+	using namespace rw;
+	using namespace gta;
+
+	Mtl *mat = (Mtl*)ifc->CreateInstance(SClass_ID(MATERIAL_CLASS_ID), Class_ID(0x29b71842, 0x52508b70));
+	IParamBlock2 *pb = mat->GetParamBlock(0);
+
+	pb->SetValue(mat_color, 0, Color(m->color.red/255.0f, m->color.green/255.0f, m->color.blue/255.0f));
+	pb->SetValue(mat_coloralpha, 0, m->color.alpha/255.0f);
+	pb->SetValue(mat_sp_ambient, 0, m->surfaceProps.ambient);
+	pb->SetValue(mat_sp_diffuse, 0, m->surfaceProps.diffuse);
+	pb->SetValue(mat_sp_specular, 0, m->surfaceProps.specular);
+
+	BitmapTex *diffmap = NULL;
+	if(m->texture)
+		mat->GetParamBlock(0)->SetValue(mat_texmap_texture, 0, diffmap = makeTexture(m->texture));
+
+	MatFX *matfx = *PLUGINOFFSET(MatFX*, m, matFXGlobals.materialOffset);
+	int32 idx;
+	BitmapTex *bmtex;
+	BitmapTex *dualmap = NULL;
+	if(matfx){
+		pb->SetValue(mat_matfxeffect, 0, (int)matfx->type+1);
+		switch(matfx->type){
+		case MatFX::BUMPMAP:
+			idx = matfx->getEffectIndex(MatFX::BUMPMAP);
+			assert(idx >= 0);
+			bmtex = makeTexture(matfx->fx[idx].bump.bumpedTex);
+			pb->SetValue(mat_texmap_bumpmap, 0, bmtex);
+			pb->SetValue(mat_bumpmap_amount, 0, matfx->fx[idx].bump.coefficient);
+			break;
+	
+		case MatFX::ENVMAP:
+			idx = matfx->getEffectIndex(MatFX::ENVMAP);
+			assert(idx >= 0);
+			bmtex = makeTexture(matfx->fx[idx].env.tex);
+			pb->SetValue(mat_texmap_envmap, 0, bmtex);
+			pb->SetValue(mat_envmap_amount, 0, matfx->fx[idx].env.coefficient);
+			break;
+	
+		case MatFX::DUAL:
+			idx = matfx->getEffectIndex(MatFX::DUAL);
+			assert(idx >= 0);
+			dualmap = makeTexture(matfx->fx[idx].dual.tex);
+			if(dualmap)
+				dualmap->GetUVGen()->SetMapChannel(2);
+			pb->SetValue(mat_texmap_pass2, 0, dualmap);
+			pb->SetValue(mat_pass2_srcblend, 0, matfx->fx[idx].dual.srcBlend);
+			pb->SetValue(mat_pass2_destblend, 0, matfx->fx[idx].dual.dstBlend);
+			break;
+	
+		case MatFX::BUMPENVMAP:
+			idx = matfx->getEffectIndex(MatFX::ENVMAP);
+			assert(idx >= 0);
+			bmtex = makeTexture(matfx->fx[idx].env.tex);
+			pb->SetValue(mat_texmap_envmap, 0, bmtex);
+			pb->SetValue(mat_envmap_amount, 0, matfx->fx[idx].env.coefficient);
+			idx = matfx->getEffectIndex(MatFX::BUMPMAP);
+			assert(idx >= 0);
+			bmtex = makeTexture(matfx->fx[idx].bump.bumpedTex);
+			pb->SetValue(mat_texmap_bumpmap, 0, bmtex);
+			pb->SetValue(mat_bumpmap_amount, 0, matfx->fx[idx].bump.coefficient);
+			break;
+		}
+	}
+
+	// R* extensions
+	IParamBlock2 *pbr = mat->GetParamBlock(1);
+	EnvMat *env = *PLUGINOFFSET(EnvMat*, m, envMatOffset);
+	if(env){
+		pbr->SetValue(mat_enEnv, 0, TRUE, 0);
+		pbr->SetValue(mat_scaleX, 0, env->scaleX/8.0f);
+		pbr->SetValue(mat_scaleY, 0, env->scaleY/8.0f);
+		pbr->SetValue(mat_transScaleX, 0, env->transScaleX/8.0f);
+		pbr->SetValue(mat_transScaleY, 0, env->transScaleY/8.0f);
+		pbr->SetValue(mat_shininess, 0, env->shininess/255.0f);
+	}
+
+	SpecMat *spec = *PLUGINOFFSET(SpecMat*, m, specMatOffset);
+	if(spec){
+		pbr->SetValue(mat_enSpec, 0, TRUE, 0);
+		pbr->SetValue(mat_specularity, 0, spec->specularity);
+		pbr->SetValue(mat_specMap, 0, makeTexture(spec->texture));
+	}
+
+	UVAnim *uvanim = PLUGINOFFSET(UVAnim, m, uvAnimOffset);
+	for(int j = 0; j < 8; j++)
+		if(uvanim->interp[j]){
+			animateTexture(uvanim->interp[j]->currentAnim, diffmap);
+			animateTexture(uvanim->interp[j]->currentAnim, dualmap);
+		}
+
+	return mat;
+}
+
+Mtl*
+DFFImport::MakeStdMaterial(rw::Material *m)
+{
+	using namespace rw;
+	using namespace gta;
+
+	StdMat *mat = NewDefaultStdMat();
+	mat->SetDiffuse(Color(m->color.red/255.0f, m->color.green/255.0f, m->color.blue/255.0f), 0);
+	mat->SetOpacity(m->color.alpha/255.0f, 0);
+	mat->SetShinStr(m->surfaceProps.specular, 0);
+	mat->SetSubTexmap(ID_DI, makeTexture(m->texture));
+	if(m->texture && m->texture->mask[0]){
+		// Switch texture name temporarily to create the mask texture
+		char hack[32];
+		memcpy(hack, m->texture->name, 32);
+		memcpy(m->texture->name, m->texture->mask, 32);
+		mat->SetSubTexmap(ID_OP, makeTexture(m->texture));
+		memcpy(m->texture->name, hack, 32);
+	}
+
+	MatFX *matfx = *PLUGINOFFSET(MatFX*, m, matFXGlobals.materialOffset);
+	int32 idx;
+	BitmapTex *bmtex;
+	if(matfx){
+		switch(matfx->type){
+		case MatFX::BUMPMAP:
+			idx = matfx->getEffectIndex(MatFX::BUMPMAP);
+			assert(idx >= 0);
+			bmtex = makeTexture(matfx->fx[idx].bump.bumpedTex);
+			mat->SetSubTexmap(ID_BU, bmtex);
+			mat->SetTexmapAmt(ID_BU, matfx->fx[idx].bump.coefficient, 0);
+			break;
+	
+		case MatFX::ENVMAP:
+			idx = matfx->getEffectIndex(MatFX::ENVMAP);
+			assert(idx >= 0);
+			bmtex = makeTexture(matfx->fx[idx].env.tex);
+			mat->SetSubTexmap(ID_RL, bmtex);
+			mat->SetTexmapAmt(ID_RL, matfx->fx[idx].env.coefficient, 0);
+			break;
+	
+		case MatFX::BUMPENVMAP:
+			idx = matfx->getEffectIndex(MatFX::ENVMAP);
+			assert(idx >= 0);
+			bmtex = makeTexture(matfx->fx[idx].env.tex);
+			mat->SetSubTexmap(ID_RL, bmtex);
+			mat->SetTexmapAmt(ID_RL, matfx->fx[idx].env.coefficient, 0);
+			idx = matfx->getEffectIndex(MatFX::BUMPMAP);
+			assert(idx >= 0);
+			bmtex = makeTexture(matfx->fx[idx].bump.bumpedTex);
+			mat->SetSubTexmap(ID_BU, bmtex);
+			mat->SetTexmapAmt(ID_BU, matfx->fx[idx].bump.coefficient, 0);
+			break;
+		}
+	}
+
+	return mat;
+}
+
 void
 DFFImport::makeMaterials(rw::Atomic *a, INode *inode)
 {
@@ -177,93 +324,11 @@ DFFImport::makeMaterials(rw::Atomic *a, INode *inode)
 
 	for(int32 i = 0; i < g->matList.numMaterials; i++){
 		rw::Material *m = g->matList.materials[i];
-		Mtl *mat = (Mtl*)ifc->CreateInstance(SClass_ID(MATERIAL_CLASS_ID), Class_ID(0x29b71842, 0x52508b70));
-		IParamBlock2 *pb = mat->GetParamBlock(0);
-
-		pb->SetValue(mat_color, 0, Color(m->color.red/255.0f, m->color.green/255.0f, m->color.blue/255.0f));
-		pb->SetValue(mat_coloralpha, 0, m->color.alpha/255.0f);
-		pb->SetValue(mat_sp_ambient, 0, m->surfaceProps.ambient);
-		pb->SetValue(mat_sp_diffuse, 0, m->surfaceProps.diffuse);
-		pb->SetValue(mat_sp_specular, 0, m->surfaceProps.specular);
-
-		BitmapTex *diffmap = NULL;
-		if(m->texture)
-			mat->GetParamBlock(0)->SetValue(mat_texmap_texture, 0, diffmap = makeTexture(m->texture));
-
-		MatFX *matfx = *PLUGINOFFSET(MatFX*, m, matFXGlobals.materialOffset);
-		int32 idx;
-		BitmapTex *bmtex;
-		BitmapTex *dualmap = NULL;
-		if(matfx){
-			pb->SetValue(mat_matfxeffect, 0, (int)matfx->type+1);
-			switch(matfx->type){
-			case MatFX::BUMPMAP:
-				idx = matfx->getEffectIndex(MatFX::BUMPMAP);
-				assert(idx >= 0);
-				bmtex = makeTexture(matfx->fx[idx].bump.bumpedTex);
-				pb->SetValue(mat_texmap_bumpmap, 0, bmtex);
-				pb->SetValue(mat_bumpmap_amount, 0, matfx->fx[idx].bump.coefficient);
-				break;
-	
-			case MatFX::ENVMAP:
-				idx = matfx->getEffectIndex(MatFX::ENVMAP);
-				assert(idx >= 0);
-				bmtex = makeTexture(matfx->fx[idx].env.tex);
-				pb->SetValue(mat_texmap_envmap, 0, bmtex);
-				pb->SetValue(mat_envmap_amount, 0, matfx->fx[idx].env.coefficient);
-				break;
-	
-			case MatFX::DUAL:
-				idx = matfx->getEffectIndex(MatFX::DUAL);
-				assert(idx >= 0);
-				dualmap = makeTexture(matfx->fx[idx].dual.tex);
-				if(dualmap)
-					dualmap->GetUVGen()->SetMapChannel(2);
-				pb->SetValue(mat_texmap_pass2, 0, dualmap);
-				pb->SetValue(mat_pass2_srcblend, 0, matfx->fx[idx].dual.srcBlend);
-				pb->SetValue(mat_pass2_destblend, 0, matfx->fx[idx].dual.dstBlend);
-				break;
-	
-			case MatFX::BUMPENVMAP:
-				idx = matfx->getEffectIndex(MatFX::ENVMAP);
-				assert(idx >= 0);
-				bmtex = makeTexture(matfx->fx[idx].env.tex);
-				pb->SetValue(mat_texmap_envmap, 0, bmtex);
-				pb->SetValue(mat_envmap_amount, 0, matfx->fx[idx].env.coefficient);
-				idx = matfx->getEffectIndex(MatFX::BUMPMAP);
-				assert(idx >= 0);
-				bmtex = makeTexture(matfx->fx[idx].bump.bumpedTex);
-				pb->SetValue(mat_texmap_bumpmap, 0, bmtex);
-				pb->SetValue(mat_bumpmap_amount, 0, matfx->fx[idx].bump.coefficient);
-				break;
-			}
-		}
-
-		// R* extensions
-		IParamBlock2 *pbr = mat->GetParamBlock(1);
-		EnvMat *env = *PLUGINOFFSET(EnvMat*, m, envMatOffset);
-		if(env){
-			pbr->SetValue(mat_enEnv, 0, TRUE, 0);
-			pbr->SetValue(mat_scaleX, 0, env->scaleX/8.0f);
-			pbr->SetValue(mat_scaleY, 0, env->scaleY/8.0f);
-			pbr->SetValue(mat_transScaleX, 0, env->transScaleX/8.0f);
-			pbr->SetValue(mat_transScaleY, 0, env->transScaleY/8.0f);
-			pbr->SetValue(mat_shininess, 0, env->shininess/255.0f);
-		}
-
-		SpecMat *spec = *PLUGINOFFSET(SpecMat*, m, specMatOffset);
-		if(spec){
-			pbr->SetValue(mat_enSpec, 0, TRUE, 0);
-			pbr->SetValue(mat_specularity, 0, spec->specularity);
-			pbr->SetValue(mat_specMap, 0, makeTexture(spec->texture));
-		}
-
-		UVAnim *uvanim = PLUGINOFFSET(UVAnim, m, uvAnimOffset);
-		for(int j = 0; j < 8; j++)
-			if(uvanim->interp[j]){
-				animateTexture(uvanim->interp[j]->currentAnim, diffmap);
-				animateTexture(uvanim->interp[j]->currentAnim, dualmap);
-			}
+		Mtl *mat;
+		if(importStdMaterials)
+			mat = MakeStdMaterial(m);
+		else
+			mat = MakeGTAMaterial(m);
 
 		if(g->matList.numMaterials == 1){
 			inode->SetMtl(mat);
@@ -275,6 +340,49 @@ DFFImport::makeMaterials(rw::Atomic *a, INode *inode)
 	inode->SetMtl(multi);
 }
 
+// Assume Geometry's triangles have invalid matid. So try to find them in Mesh...
+// ignoring winding
+static void
+SetFaceMat(rw::Geometry *g, int ix0, int ix1, int ix2, int mat)
+{
+	int i, tmp;
+	if(ix0 == ix1 || ix0 == ix2 || ix1 == ix2) return;	// degenerate
+	// sort so we can compare more easily
+	if(ix0 > ix1){ tmp = ix0; ix0 = ix1; ix1 = tmp; }
+	if(ix0 > ix2){ tmp = ix0; ix0 = ix2; ix2 = tmp; }
+	if(ix1 > ix2){ tmp = ix1; ix1 = ix2; ix2 = tmp; }
+	for(i = 0; g->numTriangles; i++){
+		int jx0 = g->triangles[i].v[0];
+		int jx1 = g->triangles[i].v[1];
+		int jx2 = g->triangles[i].v[2];
+		if(jx0 > jx1){ tmp = jx0; jx0 = jx1; jx1 = tmp; }
+		if(jx0 > jx2){ tmp = jx0; jx0 = jx2; jx2 = tmp; }
+		if(jx1 > jx2){ tmp = jx1; jx1 = jx2; jx2 = tmp; }
+		if(ix0 == jx0 && ix1 == jx1 && ix2 == jx2){
+			g->triangles[i].matId = mat;
+			break;
+		}
+	}
+}
+
+static void
+FixMatAssignment(rw::Geometry *g)
+{
+	using namespace rw;
+
+	if(g->meshHeader == nil)
+		return;
+
+	int i, j;
+	int inc = g->meshHeader->flags & MeshHeader::TRISTRIP ? 1 : 3;
+	rw::Mesh *m = g->meshHeader->getMeshes();
+	for(i = 0; i < g->meshHeader->numMeshes; i++){
+		for(j = 0; j < m->numIndices; j += inc)
+			SetFaceMat(g, m->indices[j], m->indices[j+1], m->indices[j+2], g->matList.findIndex(m->material));
+		m++;
+	}
+}
+
 void
 DFFImport::makeMesh(rw::Atomic *a, Mesh *maxmesh)
 {
@@ -283,13 +391,8 @@ DFFImport::makeMesh(rw::Atomic *a, Mesh *maxmesh)
 	Geometry *g = a->geometry;
 
 	// not all GTA tools generate face info correctly :(
-// currently broken
-//	if(g->meshHeader){
-//		delete[] g->triangles;
-//		g->triangles = NULL;
-//		g->numTriangles = 0;
-//		g->generateTriangles();
-//	}
+	if(fixKam)
+		FixMatAssignment(g);
 
 	V3d *gverts = g->morphTargets[0].vertices;
 	V3d *gnorms = g->morphTargets[0].normals;
@@ -828,6 +931,8 @@ DFFImport::dffFileRead(const TCHAR *filename)
 		int hasObject = 0;
 		// Dummy as placeholder
 		::Object *obj = (::Object*)ifc->CreateInstance(HELPER_CLASS_ID, Class_ID(DUMMY_CLASS_ID, 0));
+		float boxsize = 0.15f;
+		((DummyObject*)obj)->SetBox(Box3(Point3(-boxsize/2.0f, -boxsize/2.0f, -boxsize/2.0f), Point3(boxsize/2.0f, boxsize/2.0f, boxsize/2.0f)));
 		node = ifc->CreateObjectNode(obj);
 #endif
 		if(j == 0){
@@ -1193,8 +1298,10 @@ ImportDlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 		DLSetWindowLongPtr(hWnd, lParam); 
 		CenterWindow(hWnd, GetParent(hWnd)); 
 		CheckDlgButton(hWnd, IDC_CONVAXIS, DFFImport::convertHierarchy);
-		CheckDlgButton(hWnd, IDC_EXPLNORM, DFFImport::explicitNormals);
 		CheckDlgButton(hWnd, IDC_AUTOSMOOTH, DFFImport::autoSmooth);
+		CheckDlgButton(hWnd, IDC_EXPLNORM, DFFImport::explicitNormals);
+		CheckDlgButton(hWnd, IDC_STDMAT, DFFImport::importStdMaterials);
+		CheckDlgButton(hWnd, IDC_FIXKAM, DFFImport::fixKam);
 
 		spin = GetISpinner(GetDlgItem(hWnd, IDC_ANGLESPIN));
 		spin->LinkToEdit(GetDlgItem(hWnd, IDC_ANGLE), EDITTYPE_INT); 
@@ -1207,8 +1314,10 @@ ImportDlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 		switch(LOWORD(wParam)){
 		case IDOK:
 			DFFImport::convertHierarchy = IsDlgButtonChecked(hWnd, IDC_CONVAXIS);
-			DFFImport::explicitNormals = IsDlgButtonChecked(hWnd, IDC_EXPLNORM);
 			DFFImport::autoSmooth = IsDlgButtonChecked(hWnd, IDC_AUTOSMOOTH);
+			DFFImport::explicitNormals = IsDlgButtonChecked(hWnd, IDC_EXPLNORM);
+			DFFImport::importStdMaterials = IsDlgButtonChecked(hWnd, IDC_STDMAT);
+			DFFImport::fixKam = IsDlgButtonChecked(hWnd, IDC_FIXKAM);
 
 			spin = GetISpinner(GetDlgItem(hWnd, IDC_ANGLESPIN));
 			DFFImport::smoothingAngle = spin->GetIVal();

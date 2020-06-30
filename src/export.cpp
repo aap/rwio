@@ -40,6 +40,7 @@ static rw::Matrix rwidentmat = {
 int DFFExport::exportLit = 1;
 int DFFExport::exportNormals = 1;
 int DFFExport::exportPrelit = 0;
+int DFFExport::exportTristrip = 0;
 
 int DFFExport::worldSpace = 0;
 
@@ -309,6 +310,8 @@ DFFExport::convertAtomic(rw::Frame *frame, rw::Frame *root, rw::Clump *clump, IN
 	Geometry *geo;
 	int *map;
 	geo = convertGeometry(node, &map);
+	if(geo == nil)
+		return;
 
 	// move vertices from object into node space
 	rw::Matrix objectOffset;
@@ -499,6 +502,9 @@ DFFExport::convertNode(rw::Clump *clump, rw::Frame *frame, INode *node, int flip
 //	qsort(children, numChildren, sizeof(*children), sortByID);
 
 	for(int i = 0; i < numChildren; i++){
+		BOOL noexp;
+		if(children[i].node->GetUserPropBool(_T("noexport"), noexp) && noexp)
+			continue;
 		Frame *childframe = Frame::create();
 		frame->addChild(childframe, 1);
 		convertNode(clump, childframe, children[i].node, flip);
@@ -706,6 +712,7 @@ ExportDlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 		CheckDlgButton(hWnd, IDC_LIGHTING, DFFExport::exportLit);
 		CheckDlgButton(hWnd, IDC_NORMALS, DFFExport::exportNormals);
 		CheckDlgButton(hWnd, IDC_PRELIT, DFFExport::exportPrelit);
+		CheckDlgButton(hWnd, IDC_TRISTRIP, DFFExport::exportTristrip);
 
 		CheckDlgButton(hWnd, IDC_WORLDSPACE, DFFExport::worldSpace);
 
@@ -734,6 +741,7 @@ ExportDlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 			DFFExport::exportLit = IsDlgButtonChecked(hWnd, IDC_LIGHTING);
 			DFFExport::exportNormals = IsDlgButtonChecked(hWnd, IDC_NORMALS);
 			DFFExport::exportPrelit = IsDlgButtonChecked(hWnd, IDC_PRELIT);
+			DFFExport::exportTristrip = IsDlgButtonChecked(hWnd, IDC_TRISTRIP);
 
 			DFFExport::worldSpace = IsDlgButtonChecked(hWnd, IDC_WORLDSPACE);
 

@@ -31,3 +31,6 @@
 #define IDC_HANIM                               40021
 #define IDC_RS_EXTRACOLORS                      40022
 #define IDC_EXPLNORM                            40023
+#define IDC_STDMAT                              40024
+#define IDC_TRISTRIP                            40025
+#define IDC_FIXKAM                              40026

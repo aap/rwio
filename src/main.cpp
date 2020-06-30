@@ -37,6 +37,12 @@ static Value *setSmoothingAngle(Value *val) { DFFImport::smoothingAngle = val->t
 static Value *getPrepend() { return Integer::intern(DFFImport::prepend); }
 static Value *setPrepend(Value *val) { DFFImport::prepend = val->to_int(); return val; }
 
+static Value *getImpStdMat() { return Integer::intern(DFFImport::importStdMaterials); }
+static Value *setImpStdMat(Value *val) { DFFImport::importStdMaterials = val->to_int(); return val; }
+
+static Value *getFixKam() { return Integer::intern(DFFImport::fixKam); }
+static Value *setFixKam(Value *val) { DFFImport::fixKam = val->to_int(); return val; }
+
 // Exporter
 
 static Value *getLighting() { return Integer::intern(DFFExport::exportLit); }
@@ -96,6 +102,8 @@ initMaxscript(void)
 	define_struct_global(_T("autoSmooth"), _T("dffImp"), getAutoSmooth, setAutoSmooth);
 	define_struct_global(_T("smoothingAngle"), _T("dffImp"), getSmoothingAngle, setSmoothingAngle);
 	define_struct_global(_T("prepend"), _T("dffImp"), getPrepend, setPrepend);
+	define_struct_global(_T("importStdMaterials"), _T("dffImp"), getImpStdMat, setImpStdMat);
+	define_struct_global(_T("fixMaterialIDs"), _T("dffImp"), getFixKam, setFixKam);
 
 	define_struct_global(_T("lighting"), _T("dffExp"), getLighting, setLighting);
 	define_struct_global(_T("normals"), _T("dffExp"), getNormals, setNormals);

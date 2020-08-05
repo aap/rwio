@@ -10,6 +10,33 @@ int DFFImport::fixKam = 0;
 
 std::vector<INode*> DFFImport::lastImported;
 
+const TCHAR*
+getMaxStr(const char *str)
+{
+#ifdef _UNICODE
+	static TCHAR fuckmax[MAX_PATH];
+	mbstowcs(fuckmax, str, MAX_PATH);
+	return fuckmax;
+#else
+	return str;
+#endif
+}
+
+char*
+getUserName(rw::UserDataExtension *ud)
+{
+	using namespace rw;
+	int32 i;
+	UserDataArray *ar;
+	int32 n = ud->getCount();
+	for(i = 0; i < n; i++){
+		ar = ud->get(i);
+		if(strcmp(ar->name, "name") == 0 && ar->datatype == rw::USERDATASTRING)
+			return ar->getString(0);
+	}
+	return nil;
+}
+
 static int
 findFirstVertex(rw::V3d *verts, int n, rw::V3d *v)
 {
@@ -147,6 +174,11 @@ makeTexture(rw::Texture *tex)
 		bmtex->GetUVGen()->SetFlag(V_MIRROR, 1);
 		break;
 	}
+
+	char *name = getUserName(UserDataExtension::get(tex));
+	if(name)
+		bmtex->SetName(getMaxStr(name));
+
 	return bmtex;
 }
 
@@ -329,6 +361,10 @@ DFFImport::makeMaterials(rw::Atomic *a, INode *inode)
 			mat = MakeStdMaterial(m);
 		else
 			mat = MakeGTAMaterial(m);
+
+		char *name = getUserName(UserDataExtension::get(m));
+		if(name)
+			mat->SetName(getMaxStr(name));
 
 		if(g->matList.numMaterials == 1){
 			inode->SetMtl(mat);
@@ -790,29 +826,28 @@ attachBones(ISkinImportData *skinImp, INode *node)
 }
 
 char*
-getFrameUserName(rw::Frame *f)
-{
-	using namespace rw;
-	int32 i;
-	UserDataArray *ar;
-	int32 n = UserDataArray::frameGetCount(f);
-	for(i = 0; i < n; i++){
-		ar = UserDataArray::frameGet(f, i);
-		if(strcmp(ar->name, "name") == 0 && ar->datatype == rw::USERDATASTRING)
-			return ar->getString(0);
-	}
-	return nil;
-}
-
-char*
 getFrameName(rw::Frame *f)
 {
 	char *name;
 	name = gta::getNodeName(f);
 	if(name[0] == '\0')
-		return getFrameUserName(f);
+		return getUserName(rw::UserDataExtension::get(f));
 	else
 		return name;
+}
+
+void
+setNameFromObjName(INode *node, const char *shapename)
+{
+	if(shapename == nil)
+		return;
+	const char *end = strstr(shapename, "Shape");
+	if(end == nil)
+		return;
+	char nodename[MAX_PATH];
+	strncpy(nodename, shapename, MAX_PATH);
+	nodename[end-shapename] = '\0';
+	node->SetName((TCHAR*)getMaxStr(nodename));
 }
 
 static rw::Clump*
@@ -1002,20 +1037,10 @@ DFFImport::dffFileRead(const TCHAR *filename)
 				strcat(maxname, name);
 			}else
 				strncpy(maxname, name, 32);
-#ifdef _UNICODE
-			WCHAR fuckyou[50];
-			mbstowcs(fuckyou, maxname, 50);
 #ifdef USE_IMPNODES
-			impnode->SetName(fuckyou);
+			impnode->SetName((TCHAR*)getMaxStr(maxname));
 #else
-			node->SetName(fuckyou);
-#endif
-#else
-#ifdef USE_IMPNODES
-			impnode->SetName(maxname);
-#else
-			node->SetName(maxname);
-#endif
+			node->SetName((TCHAR*)getMaxStr(maxname));
 #endif
 		}
 
@@ -1049,6 +1074,7 @@ DFFImport::dffFileRead(const TCHAR *filename)
 					skinNode = ifc->CreateObjectNode(tri);
 					skinNode->SetNodeTM(t, rootnode->GetNodeTM(t));
 #endif
+					setNameFromObjName(skinNode, getUserName(UserDataExtension::get(a->geometry)));
 					makeMaterials(a, skinNode);
 					skinInfo[numSkinned].atomic = a;
 					skinInfo[numSkinned].node = skinNode;
@@ -1063,6 +1089,8 @@ DFFImport::dffFileRead(const TCHAR *filename)
 					node->SetObjectRef(tri);
 					hasObject = 1;
 #endif
+					if(name == nil)
+						setNameFromObjName(node, getUserName(UserDataExtension::get(a->geometry)));
 					makeMaterials(a, node);
 				}
 			}else if(obj->object.type == rw::Light::ID){
@@ -1101,6 +1129,8 @@ DFFImport::dffFileRead(const TCHAR *filename)
 				node->SetObjectRef(gl);
 				hasObject = 1;
 #endif
+				if(name == nil)
+					setNameFromObjName(node, getUserName(UserDataExtension::get(l)));
 				node->SetWireColor(0xFF00E5FF);
 				ifc->AddLightToScene(node);
 				gl->Enable(TRUE);
@@ -1115,6 +1145,8 @@ DFFImport::dffFileRead(const TCHAR *filename)
 				node->SetObjectRef(gc);
 				hasObject = 1;
 #endif
+				if(name == nil)
+					setNameFromObjName(node, getUserName(UserDataExtension::get(c)));
 				gc->SetFOV(t, atan(c->viewWindow.x)*2);
 				gc->SetManualClip(1);
 				gc->SetClipDist(t, CAM_HITHER_CLIP, c->nearPlane);
@@ -1333,9 +1365,9 @@ ImportDlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 			break;
 		}
 		break;
-		default:
-			//lprintf("MESG: %d\n", LOWORD(msg));
-			return FALSE;
+	default:
+		//lprintf("MESG: %d\n", LOWORD(msg));
+		return FALSE;
 	}
 	return TRUE;
 }

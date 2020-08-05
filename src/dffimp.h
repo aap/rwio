@@ -155,6 +155,16 @@ public:
 	// animation
 	static int exportHAnim;
 	static int exportSkin;
+	// user data
+	static int exportUserData;
+	static int exportObjNames;
+	static TCHAR exportObjNames_Entry[128];
+	static int exportObjNames_Geo;
+	static int exportObjNames_Frm;
+	static int exportObjNames_Cam;
+	static int exportObjNames_Lgt;
+	static int exportObjNames_Mat;
+	static int exportObjNames_Tex;
 	// R* extension
 	static int exportExtraColors;
 	static int exportNames;

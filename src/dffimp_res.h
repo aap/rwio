@@ -4,6 +4,7 @@
 
 #define IDD_DFFIMPORT                           101
 #define IDD_DFFEXPORT                           103
+#define IDD_NAMEOPT                             104
 #define IDC_AUTOSMOOTH                          40000
 #define IDC_V1SPIN                              40000
 #define IDS_CLASSNAME                           40000
@@ -34,3 +35,13 @@
 #define IDC_STDMAT                              40024
 #define IDC_TRISTRIP                            40025
 #define IDC_FIXKAM                              40026
+#define IDC_USERDATA                            40027
+#define IDC_OBJNAMES                            40028
+#define IDC_NAMES_MORE                          40029
+#define IDC_NAME_ENTRY                          40029
+#define IDC_NAME_GEO                            40030
+#define IDC_NAME_FRM                            40031
+#define IDC_NAME_CAM                            40032
+#define IDC_NAME_LGT                            40033
+#define IDC_NAME_MAT                            40034
+#define IDC_NAME_TEX                            40035

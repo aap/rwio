@@ -1,6 +1,6 @@
 #include "dffimp.h"
 
-rw::Matrix::Tolerance exportTolerance = { 0.001, 0.001, 0.001 };
+rw::Matrix::Tolerance exportTolerance = { 0.001f, 0.001f, 0.001f };
 
 static rw::Matrix flipZMat = {
 	{-1.0f, 0.0f,  0.0f}, rw::Matrix::TYPEORTHONORMAL,
@@ -47,6 +47,16 @@ int DFFExport::worldSpace = 0;
 int DFFExport::exportHAnim = 0;
 int DFFExport::exportSkin = 0;
 
+int DFFExport::exportUserData = 0;
+int DFFExport::exportObjNames = 0;
+TCHAR DFFExport::exportObjNames_Entry[128] = _T("name");
+int DFFExport::exportObjNames_Geo = 1;
+int DFFExport::exportObjNames_Frm = 1;
+int DFFExport::exportObjNames_Cam = 1;
+int DFFExport::exportObjNames_Lgt = 1;
+int DFFExport::exportObjNames_Mat = 1;
+int DFFExport::exportObjNames_Tex = 1;
+
 int DFFExport::exportExtraColors = 0;
 int DFFExport::exportNames = 1;
 
@@ -75,6 +85,84 @@ getObjectToLocalMatrix(INode *node)
 	nodeTM.NoScale();
 	objectTM *= Inverse(nodeTM);
 	return objectTM;
+}
+
+const char*
+getAsciiStr(const TCHAR *str)
+{
+#ifdef _UNICODE
+	static char fuckmax[MAX_PATH];
+	wcstombs(fuckmax, str, MAX_PATH);
+	return fuckmax;
+#else
+	return str;
+#endif
+}
+
+#if MAX_API_NUM <= 25	// 2009
+	typedef TCHAR PARAMTCHAR;
+#else
+	typedef const TCHAR PARAMTCHAR;
+#endif
+
+IParamBlock2*
+getRwCustAttribs(ICustAttribContainer *cc, const TCHAR *datatype)
+{
+	Interval valid = FOREVER;
+	if(cc){
+		int nca = cc->GetNumCustAttribs();
+		for(int j = 0; j < nca; j++){
+			CustAttrib *a = cc->GetCustAttrib(j);
+			IParamBlock2 *pb = a->GetParamBlock(0);
+			if(pb->NumParams() < 3 ||
+			   pb->GetParameterType(0) != TYPE_STRING ||
+			   pb->GetParameterType(1) != TYPE_STRING)
+				continue;
+			PARAMTCHAR *name;
+			pb->GetValue(0, 0, name, valid);
+			if(_tcscmp(name, _T("RenderWare")) != 0) continue;
+			pb->GetValue(1, 0, name, valid);
+			if(_tcscmp(name, datatype) != 0) continue;
+			return pb;
+		}
+	}
+	return nil;
+}
+
+void
+setUserProps(ICustAttribContainer *cc, const TCHAR *datatype, rw::UserDataExtension *ud)
+{
+	if(!DFFExport::exportUserData)
+		return;
+	IParamBlock2 *pb = getRwCustAttribs(cc, datatype);
+	if(pb == nil)
+		return;
+
+	Interval valid = FOREVER;
+	float floatattr;
+	int intattr;
+	PARAMTCHAR *strattr;
+	for(int i = 2; i < pb->NumParams(); i++){
+		MSTR name = pb->GetLocalName(i);
+		int slot;
+		switch(pb->GetParameterType(i)){
+		case TYPE_FLOAT:
+			pb->GetValue(i, 0, floatattr, valid);
+			slot = ud->add(getAsciiStr(name.data()), rw::USERDATAFLOAT, 1);
+			ud->get(slot)->setFloat(0, floatattr);
+			break;
+		case TYPE_INT:
+			pb->GetValue(i, 0, intattr, valid);
+			slot = ud->add(getAsciiStr(name.data()), rw::USERDATAINT, 1);
+			ud->get(slot)->setInt(0, intattr);
+			break;
+		case TYPE_STRING:
+			pb->GetValue(i, 0, strattr, valid);
+			slot = ud->add(getAsciiStr(name.data()), rw::USERDATASTRING, 1);
+			ud->get(slot)->setString(0, getAsciiStr(strattr));
+			break;
+		}
+	}
 }
 
 static void
@@ -263,6 +351,14 @@ DFFExport::convertLight(rw::Frame *frame, rw::Clump *clump, INode *node)
 		rwlight->setAngle(DegToRad(state.fallsize/2.0f));
 	rwlight->setFrame(frame);
 	clump->addLight(rwlight);
+
+	if(DFFExport::exportObjNames && DFFExport::exportObjNames_Lgt){
+		int ud = UserDataArray::lightAdd(rwlight, getAsciiStr(DFFExport::exportObjNames_Entry), USERDATASTRING, 1);
+		char shapename[128];
+		snprintf(shapename, 128, "%sShape", getAsciiStr(node->GetName()));
+		UserDataArray::lightGet(rwlight, ud)->setString(0, shapename);
+	}
+	setUserProps(node->GetObjectRef()->GetCustAttribContainer(), _T("Texture"), UserDataExtension::get(rwlight));
 }
 
 void
@@ -283,6 +379,14 @@ DFFExport::convertCamera(rw::Frame *frame, rw::Clump *clump, INode *node)
 	rwcam->viewWindow.y = rwcam->viewWindow.x*3.0f/4.0f;
 	rwcam->setFrame(frame);
 	clump->addCamera(rwcam);
+
+	if(DFFExport::exportObjNames && DFFExport::exportObjNames_Cam){
+		int ud = UserDataArray::cameraAdd(rwcam, getAsciiStr(DFFExport::exportObjNames_Entry), USERDATASTRING, 1);
+		char shapename[128];
+		snprintf(shapename, 128, "%sShape", getAsciiStr(node->GetName()));
+		UserDataArray::cameraGet(rwcam, ud)->setString(0, shapename);
+	}
+	setUserProps(node->GetObjectRef()->GetCustAttribContainer(), _T("Camera"), UserDataExtension::get(rwcam));
 }
 
 void
@@ -460,6 +564,11 @@ DFFExport::convertNode(rw::Clump *clump, rw::Frame *frame, INode *node, int flip
 		flipFrameZ(frame);
 
 	customFrameData(frame, node);
+	if(DFFExport::exportObjNames && DFFExport::exportObjNames_Frm){
+		int ud = UserDataArray::frameAdd(frame, getAsciiStr(DFFExport::exportObjNames_Entry), USERDATASTRING, 1);
+		UserDataArray::frameGet(frame, ud)->setString(0, getAsciiStr(node->GetName()));
+	}
+	setUserProps(node->GetObjectRef()->GetCustAttribContainer(), _T("Transform"), UserDataExtension::get(frame));
 
 	int thisIndex = -1;
 	int oldNumNodes = -1;
@@ -668,6 +777,7 @@ static struct {
 	{ _T("GTA III/VC Mobile (3.4)"),   0x34005 },
 	{ _T("GTA III/VC XBOX (3.5)"),   0x35000 },
 	{ _T("GTA SA (3.6)"),   0x36003 },
+	{ _T("Latest (3.7)"),   0x37002 },
 	{ NULL, 0 }
 };
 
@@ -699,16 +809,64 @@ setVersionFields(HWND hWnd)
 }
 
 static INT_PTR CALLBACK
+ExpNameDlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
+{
+	ICustEdit *edit;
+//	DFFExport *exp = DLGetWindowLongPtr<DFFExport*>(hWnd);
+	switch(msg){
+	case WM_INITDIALOG:
+		DLSetWindowLongPtr(hWnd, lParam);
+
+		CheckDlgButton(hWnd, IDC_NAME_GEO, DFFExport::exportObjNames_Geo);
+		CheckDlgButton(hWnd, IDC_NAME_FRM, DFFExport::exportObjNames_Frm);
+		CheckDlgButton(hWnd, IDC_NAME_CAM, DFFExport::exportObjNames_Cam);
+		CheckDlgButton(hWnd, IDC_NAME_LGT, DFFExport::exportObjNames_Lgt);
+		CheckDlgButton(hWnd, IDC_NAME_MAT, DFFExport::exportObjNames_Mat);
+		CheckDlgButton(hWnd, IDC_NAME_TEX, DFFExport::exportObjNames_Tex);
+
+		edit = GetICustEdit(GetDlgItem(hWnd, IDC_NAME_ENTRY));
+		edit->SetText(DFFExport::exportObjNames_Entry);
+		ReleaseICustEdit(edit);
+
+		break;
+	case WM_COMMAND:
+		switch(LOWORD(wParam)){
+		case IDCANCEL:
+			EndDialog(hWnd, 0);
+			break;
+		case IDOK:
+			DFFExport::exportObjNames_Geo = IsDlgButtonChecked(hWnd, IDC_NAME_GEO);
+			DFFExport::exportObjNames_Frm = IsDlgButtonChecked(hWnd, IDC_NAME_FRM);
+			DFFExport::exportObjNames_Cam = IsDlgButtonChecked(hWnd, IDC_NAME_CAM);
+			DFFExport::exportObjNames_Lgt = IsDlgButtonChecked(hWnd, IDC_NAME_LGT);
+			DFFExport::exportObjNames_Mat = IsDlgButtonChecked(hWnd, IDC_NAME_MAT);
+			DFFExport::exportObjNames_Tex = IsDlgButtonChecked(hWnd, IDC_NAME_TEX);
+
+			edit = GetICustEdit(GetDlgItem(hWnd, IDC_NAME_ENTRY));
+			edit->GetText(DFFExport::exportObjNames_Entry, 128);
+			ReleaseICustEdit(edit);
+
+			EndDialog(hWnd, 1);
+			break;
+		}
+		break;
+	default:
+		return FALSE;
+	}
+	return TRUE;
+}
+
+static INT_PTR CALLBACK
 ExportDlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
 	ISpinnerControl  *spin;
 	HWND cb;
-	DFFExport *exp = DLGetWindowLongPtr<DFFExport*>(hWnd); 
+//	DFFExport *exp = DLGetWindowLongPtr<DFFExport*>(hWnd);
 	switch(msg){
 	case WM_INITDIALOG:
-		exp = (DFFExport*)lParam;
-		DLSetWindowLongPtr(hWnd, lParam); 
-		CenterWindow(hWnd, GetParent(hWnd)); 
+//		exp = (DFFExport*)lParam;
+		DLSetWindowLongPtr(hWnd, lParam);
+		CenterWindow(hWnd, GetParent(hWnd));
 		CheckDlgButton(hWnd, IDC_LIGHTING, DFFExport::exportLit);
 		CheckDlgButton(hWnd, IDC_NORMALS, DFFExport::exportNormals);
 		CheckDlgButton(hWnd, IDC_PRELIT, DFFExport::exportPrelit);
@@ -718,6 +876,9 @@ ExportDlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
 		CheckDlgButton(hWnd, IDC_HANIM, DFFExport::exportHAnim);
 		CheckDlgButton(hWnd, IDC_SKINNING, DFFExport::exportSkin);
+
+		CheckDlgButton(hWnd, IDC_USERDATA, DFFExport::exportUserData);
+		CheckDlgButton(hWnd, IDC_OBJNAMES, DFFExport::exportObjNames);
 
 		CheckDlgButton(hWnd, IDC_RS_NODENAME, DFFExport::exportNames);
 		CheckDlgButton(hWnd, IDC_RS_EXTRACOLORS, DFFExport::exportExtraColors);
@@ -737,6 +898,9 @@ ExportDlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 			break;
 		}
 		switch(LOWORD(wParam)){
+		case IDC_NAMES_MORE:
+			DialogBoxParam(hInstance, MAKEINTRESOURCE(IDD_NAMEOPT), hWnd, ExpNameDlgProc, (LPARAM)nil);
+			break;
 		case IDOK:
 			DFFExport::exportLit = IsDlgButtonChecked(hWnd, IDC_LIGHTING);
 			DFFExport::exportNormals = IsDlgButtonChecked(hWnd, IDC_NORMALS);
@@ -747,7 +911,10 @@ ExportDlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
 			DFFExport::exportHAnim = IsDlgButtonChecked(hWnd, IDC_HANIM);
 			DFFExport::exportSkin = IsDlgButtonChecked(hWnd, IDC_SKINNING);
- 
+
+			DFFExport::exportUserData = IsDlgButtonChecked(hWnd, IDC_USERDATA);
+			DFFExport::exportObjNames = IsDlgButtonChecked(hWnd, IDC_OBJNAMES);
+
 			DFFExport::exportNames = IsDlgButtonChecked(hWnd, IDC_RS_NODENAME);
 			DFFExport::exportExtraColors = IsDlgButtonChecked(hWnd, IDC_RS_EXTRACOLORS);
 
@@ -771,8 +938,8 @@ ExportDlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 			break;
 		}
 		break;
-		default:
-			return FALSE;
+	default:
+		return FALSE;
 	}
 	return TRUE;
 }

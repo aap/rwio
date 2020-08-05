@@ -1,5 +1,8 @@
 #include "dffimp.h"
 
+const char *getAsciiStr(const TCHAR *str);
+void setUserProps(ICustAttribContainer *cc, const TCHAR *datatype, rw::UserDataExtension *ud);
+
 // stolen from RW
 static void
 GetFileName(char *outFileName, char *fullPathName)
@@ -84,6 +87,13 @@ convertTexture(Texmap *tex, Texmap *mask)
 	if(tiling & V_MIRROR)
 		wrapv = Texture::MIRROR;
 	rwt->filterAddressing = (wrapv << 12) | (wrapu << 8) | filter;
+
+	if(DFFExport::exportObjNames && DFFExport::exportObjNames_Tex){
+		int ud = UserDataArray::textureAdd(rwt, getAsciiStr(DFFExport::exportObjNames_Entry), USERDATASTRING, 1);
+		UserDataArray::textureGet(rwt, ud)->setString(0, getAsciiStr(tex->GetName()));
+	}
+	setUserProps(tex->GetCustAttribContainer(), _T("Texture"), UserDataExtension::get(rwt));
+
 	return rwt;
 }
 
@@ -199,6 +209,13 @@ convertMaterial(Mtl *mtl)
 			matfx->setDualDestBlend(dstblend);
 		}
 	}
+
+	if(DFFExport::exportObjNames && DFFExport::exportObjNames_Mat){
+		int ud = UserDataArray::materialAdd(rwm, getAsciiStr(DFFExport::exportObjNames_Entry), USERDATASTRING, 1);
+		UserDataArray::materialGet(rwm, ud)->setString(0, getAsciiStr(mtl->GetName()));
+	}
+	setUserProps(mtl->GetCustAttribContainer(), _T("Material"), UserDataExtension::get(rwm));
+
 	return rwm;
 }
 
@@ -280,6 +297,7 @@ DFFExport::convertGeometry(INode *node, int **vertexmap)
 		mask |= 0x200;
 	int numUV = getNumUVSets(mesh);
 	// TODO: allow more!
+	// limited by the SA vertex below atm...
 	if(numUV > 2)	numUV = 2;
 	if(numUV == 1)
 		flags |= Geometry::TEXTURED;
@@ -407,6 +425,15 @@ DFFExport::convertGeometry(INode *node, int **vertexmap)
 
 	if(tri != obj)
 		tri->DeleteMe();
+
+	if(DFFExport::exportObjNames && DFFExport::exportObjNames_Geo){
+		int ud = UserDataArray::geometryAdd(geo, getAsciiStr(DFFExport::exportObjNames_Entry), USERDATASTRING, 1);
+		char shapename[128];
+		snprintf(shapename, 128, "%sShape", getAsciiStr(node->GetName()));
+		UserDataArray::geometryGet(geo, ud)->setString(0, shapename);
+	}
+	setUserProps(node->GetObjectRef()->GetCustAttribContainer(), _T("Object"), UserDataExtension::get(geo));
+
 	return geo;
 }
 

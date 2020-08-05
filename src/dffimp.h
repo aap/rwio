@@ -39,20 +39,41 @@
 #define lprintf the_listener->edit_stream->printf
 #define lflush the_listener->edit_stream->flush
 
-#define STR_CLASSNAME                 "RenderWare model"
+#define STR_DFFCLASSNAME              "RenderWare model"
+#define STR_ANMCLASSNAME              "RenderWare animation"
 #define STR_LIBDESCRIPTION            "DFF File Im-/Exporter"
 #define STR_DFFFILE                   "RenderWare .DFF File"
+#define STR_ANMFILE                   "RenderWare .ANM File"
 #define STR_AUTHOR                    "aap"
 #define STR_SCENEIMPORT               "Scene Import"
-#define STR_COPYRIGHT                 "Copyright 2016 aap"
+#define STR_COPYRIGHT                 "Copyright 2016-2020 aap"
 #define STR_SCENEEXPORT               "Scene Export"
 
-#define VERSION 211
+#define VERSION 340
 
 //TCHAR *GetStringT(int id);
 
 //rw::Geometry *convertGeometry(INode *node, int **vertexmap);
 //void convertSkin(rw::Geometry *geo, INode *node, Modifier *mod, int *map);
+
+const char *getAsciiStr(const TCHAR *str);
+const TCHAR *getMaxStr(const char *str);
+
+INode *getRootOf(INode *node);
+INode *getRootOfSelection(Interface *ifc);
+void extendAnimRange(float duration);
+int getID(INode *node, int *id);
+int getChildNum(INode *node);
+
+struct SortNode
+{
+	int id;
+	const MCHAR *name;
+	int childNum;
+	INode *node;
+};
+int sortByID(const void *a, const void *b);
+int sortByChildNum(const void *a, const void *b);
 
 Matrix3 getLocalMatrix(INode *node);
 Matrix3 getObjectToLocalMatrix(INode *node);
@@ -207,6 +228,52 @@ public:
 
 	COLExport();
 	~COLExport();
+	int ExtCount();				// Number of extensions supported
+	const TCHAR *Ext(int n);		// Extension #n (i.e. "3DS")
+	const TCHAR *LongDesc();		// Long ASCII description (i.e. "Autodesk 3D Studio File")
+	const TCHAR *ShortDesc();		// Short ASCII description (i.e. "3D Studio")
+	const TCHAR *AuthorName();		// ASCII Author name
+	const TCHAR *CopyrightMessage();	// ASCII Copyright message
+	const TCHAR *OtherMessage1();		// Other message #1
+	const TCHAR *OtherMessage2();		// Other message #2
+	unsigned int Version();			// Version number * 100 (i.e. v3.01 = 301)
+	void ShowAbout(HWND hWnd);		// Show DLL's "About..." box
+	int DoExport(const TCHAR *name, ExpInterface *ei, Interface *i, BOOL suppressPrompts=FALSE, DWORD options=0);	// Export file
+	BOOL SupportsOptions(int ext, DWORD options);
+};
+
+class ANMImport : public SceneImport
+{
+	Interface *ifc;
+
+public:
+	BOOL anmFileRead(const TCHAR *filename);
+
+	ANMImport();
+	~ANMImport();
+	int ExtCount();				// Number of extensions supported
+	const TCHAR *Ext(int n);		// Extension #n (i.e. "3DS")
+	const TCHAR *LongDesc();		// Long ASCII description (i.e. "Autodesk 3D Studio File")
+	const TCHAR *ShortDesc();		// Short ASCII description (i.e. "3D Studio")
+	const TCHAR *AuthorName();		// ASCII Author name
+	const TCHAR *CopyrightMessage();	// ASCII Copyright message
+	const TCHAR *OtherMessage1();		// Other message #1
+	const TCHAR *OtherMessage2();		// Other message #2
+	unsigned int Version();			// Version number * 100 (i.e. v3.01 = 301)
+	void ShowAbout(HWND hWnd);		// Show DLL's "About..." box
+	int DoImport(const TCHAR *name, ImpInterface *ii, Interface *i, BOOL suppressPrompts=FALSE);	// Import file
+};
+
+class ANMExport : public SceneExport
+{
+	Interface *ifc;
+	ExpInterface *expifc;
+
+public:
+	BOOL anmFileWrite(const TCHAR *filename);
+
+	ANMExport();
+	~ANMExport();
 	int ExtCount();				// Number of extensions supported
 	const TCHAR *Ext(int n);		// Extension #n (i.e. "3DS")
 	const TCHAR *LongDesc();		// Long ASCII description (i.e. "Autodesk 3D Studio File")

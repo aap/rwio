@@ -87,18 +87,6 @@ getObjectToLocalMatrix(INode *node)
 	return objectTM;
 }
 
-const char*
-getAsciiStr(const TCHAR *str)
-{
-#ifdef _UNICODE
-	static char fuckmax[MAX_PATH];
-	wcstombs(fuckmax, str, MAX_PATH);
-	return fuckmax;
-#else
-	return str;
-#endif
-}
-
 #if MAX_API_NUM <= 25	// 2009
 	typedef TCHAR PARAMTCHAR;
 #else
@@ -448,28 +436,6 @@ DFFExport::convertAtomic(rw::Frame *frame, rw::Frame *root, rw::Clump *clump, IN
 	clump->addAtomic(atomic);
 }
 
-// check for explicitly set ID
-static int
-getID(INode *node, int *id)
-{
-	int tag;
-	if(node->GetUserPropInt(_T("tag"), tag)){
-		*id = tag;
-		return 1;
-	}
-	*id = -1;
-	return 0;
-}
-
-static int
-getChildNum(INode *node)
-{
-	int num;
-	if(node->GetUserPropInt(_T("childNum"), num))
-		return num;
-	return -1;
-}
-
 static void
 flipFrameZ(rw::Frame *frame)
 {
@@ -484,36 +450,6 @@ flipFrameZ(rw::Frame *frame)
 	m->pos = pos;
 	m->optimize(&exportTolerance);
 	frame->updateObjects();
-}
-
-struct SortNode
-{
-	int id;
-	const MCHAR *name;
-	int childNum;
-	INode *node;
-};
-
-static int
-sortByID(const void *a, const void *b)
-{
-	SortNode *na = (SortNode*)a;
-	SortNode *nb = (SortNode*)b;
-	// sort nodes with no or negative tag to the back
-	if(na->id < 0) return 1;
-	if(nb->id < 0) return -1;
-	return na->id - nb->id;
-}
-
-static int
-sortByChildNum(const void *a, const void *b)
-{
-	SortNode *na = (SortNode*)a;
-	SortNode *nb = (SortNode*)b;
-	// sort nodes with no or negative tag to the back
-	if(na->childNum < 0) return 1;
-	if(nb->childNum < 0) return -1;
-	return na->childNum - nb->childNum;
 }
 
 rw::Frame*
@@ -641,20 +577,11 @@ DFFExport::writeDFF(const TCHAR *filename)
 
 	rw::platform = PLATFORM_NULL;
 
-	// Find root of the node hierarchy we're exporting
-	int numSelected = this->ifc->GetSelNodeCount();
-	INode *rootnode = NULL;
-	for(int i = 0; i < numSelected; i++){
-		INode *n = this->ifc->GetSelNode(i);
-		rootnode = getRootOf(n);
-		break;
-		//lprintf(_T(": %s : %s\n"), n->GetName(), rootnode->GetName());
-	}
-	if(rootnode == NULL){
+	this->rootnode = getRootOfSelection(this->ifc);
+	if(this->rootnode == nil){
 		lprintf(_T("error: nothing selected\n"));
 		return 0;
 	}
-	this->rootnode = rootnode;
 
 	Clump *clump = Clump::create();
 	// actual root of the hierarchy, there may be a dummy above this one
@@ -745,14 +672,10 @@ DFFExport::writeDFF(const TCHAR *filename)
 	//dumpFrameHier(clump->getFrame());
 	StreamFile stream;
 
-#ifdef _UNICODE
-	char path[MAX_PATH];
-	wcstombs(path, filename, MAX_PATH);
-	if(stream.open(path, "wb") == NULL){
-#else
-	if(stream.open(filename, "wb") == NULL){
-#endif
+	if(stream.open(getAsciiStr(filename), "wb") == NULL){
 		lprintf(_T("error: couldn't open file\n"));
+		stream.close();
+		clump->destroy();
 		return 0;
 	}
 	hAnimDoStream = DFFExport::exportHAnim;
@@ -977,7 +900,7 @@ DFFExport::LongDesc(void)
 const TCHAR*
 DFFExport::ShortDesc(void)
 {
-	return _T(STR_CLASSNAME); //GetStringT(IDS_CLASSNAME);
+	return _T(STR_DFFCLASSNAME); //GetStringT(IDS_CLASSNAME);
 }
 
 const TCHAR*

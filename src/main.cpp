@@ -23,6 +23,109 @@ initRW(void)
 	rw::Texture::setLoadTextures(0);
 }
 
+const char*
+getAsciiStr(const TCHAR *str)
+{
+#ifdef _UNICODE
+	static char fuckmax[MAX_PATH];
+	wcstombs(fuckmax, str, MAX_PATH);
+	return fuckmax;
+#else
+	return str;
+#endif
+}
+
+const TCHAR*
+getMaxStr(const char *str)
+{
+#ifdef _UNICODE
+	static TCHAR fuckmax[MAX_PATH];
+	mbstowcs(fuckmax, str, MAX_PATH);
+	return fuckmax;
+#else
+	return str;
+#endif
+}
+
+
+
+// Find node highest up in hierarchy that isn't the scene root
+INode*
+getRootOf(INode *node)
+{
+	while(!node->GetParentNode()->IsRootNode())
+		node = node->GetParentNode();
+	return node;
+}
+
+INode*
+getRootOfSelection(Interface *ifc)
+{
+	// Find root of the node hierarchy we're exporting,
+	// i.e. first in selection.
+	// TODO: could we be smarter about this?
+	int numSelected = ifc->GetSelNodeCount();
+	for(int i = 0; i < numSelected; i++)
+		return getRootOf(ifc->GetSelNode(i));
+	return nil;
+}
+
+void
+extendAnimRange(float duration)
+{
+	Interval range = GetCOREInterface()->GetAnimRange();
+	TimeValue end = SecToTicks(duration);
+	if(end > range.End()){
+		range.SetEnd(end);
+		GetCOREInterface()->SetAnimRange(range);
+	}
+}
+
+// check for explicitly set ID
+int
+getID(INode *node, int *id)
+{
+	int tag;
+	if(node->GetUserPropInt(_T("tag"), tag)){
+		*id = tag;
+		return 1;
+	}
+	*id = -1;
+	return 0;
+}
+
+// check for explicit hierarchy sorting number
+int
+getChildNum(INode *node)
+{
+	int num;
+	if(node->GetUserPropInt(_T("childNum"), num))
+		return num;
+	return -1;
+}
+
+int
+sortByID(const void *a, const void *b)
+{
+	SortNode *na = (SortNode*)a;
+	SortNode *nb = (SortNode*)b;
+	// sort nodes with no or negative tag to the back
+	if(na->id < 0) return 1;
+	if(nb->id < 0) return -1;
+	return na->id - nb->id;
+}
+
+int
+sortByChildNum(const void *a, const void *b)
+{
+	SortNode *na = (SortNode*)a;
+	SortNode *nb = (SortNode*)b;
+	// sort nodes with no or negative num to the back
+	if(na->childNum < 0) return 1;
+	if(nb->childNum < 0) return -1;
+	return na->childNum - nb->childNum;
+}
+
 // Importer
 
 static Value *getConvertHierarchy() { return Integer::intern(DFFImport::convertHierarchy); }
@@ -159,7 +262,7 @@ class DFFImportDesc : public ClassDesc {
 	public:
 	int IsPublic(void) { return 1; }
 	void *Create(BOOL loading = FALSE) { return new DFFImport; }
-	const TCHAR *ClassName(void) { return _T(STR_CLASSNAME); /*GetStringT(IDS_CLASSNAME);*/ }
+	const TCHAR *ClassName(void) { return _T(STR_DFFCLASSNAME); /*GetStringT(IDS_CLASSNAME);*/ }
 	SClass_ID SuperClassID(void) { return SCENE_IMPORT_CLASS_ID; }
 	Class_ID ClassID(void) { return Class_ID(0xc42486c, 0x6f900bef); }
 	const TCHAR *Category(void) { return _T(STR_SCENEIMPORT); /*GetStringT(IDS_SCENEIMPORT);*/  }
@@ -169,9 +272,29 @@ class DFFExportDesc : public ClassDesc {
 	public:
 	int IsPublic(void) { return 1; }
 	void *Create(BOOL loading = FALSE) { return new DFFExport; }
-	const TCHAR *ClassName(void) { return _T(STR_CLASSNAME); /*GetStringT(IDS_CLASSNAME);*/ }
+	const TCHAR *ClassName(void) { return _T(STR_DFFCLASSNAME); /*GetStringT(IDS_CLASSNAME);*/ }
 	SClass_ID SuperClassID(void) { return SCENE_EXPORT_CLASS_ID; }
 	Class_ID ClassID(void) { return Class_ID(0x6e2a398d, 0x2afe6e70); }
+	const TCHAR *Category(void) { return _T(STR_SCENEEXPORT); /*GetStringT(IDS_SCENEEXPORT);*/  }
+};
+
+class ANMImportDesc : public ClassDesc {
+	public:
+	int IsPublic(void) { return 1; }
+	void *Create(BOOL loading = FALSE) { return new ANMImport; }
+	const TCHAR *ClassName(void) { return _T(STR_ANMCLASSNAME); /*GetStringT(IDS_CLASSNAME);*/ }
+	SClass_ID SuperClassID(void) { return SCENE_IMPORT_CLASS_ID; }
+	Class_ID ClassID(void) { return Class_ID(0x7de72f47, 0x2d020d73); }
+	const TCHAR *Category(void) { return _T(STR_SCENEIMPORT); /*GetStringT(IDS_SCENEEXPORT);*/  }
+};
+
+class ANMExportDesc : public ClassDesc {
+	public:
+	int IsPublic(void) { return 1; }
+	void *Create(BOOL loading = FALSE) { return new ANMExport; }
+	const TCHAR *ClassName(void) { return _T(STR_ANMCLASSNAME); /*GetStringT(IDS_CLASSNAME);*/ }
+	SClass_ID SuperClassID(void) { return SCENE_EXPORT_CLASS_ID; }
+	Class_ID ClassID(void) { return Class_ID(0xa9d6559, 0x55eb1212); }
 	const TCHAR *Category(void) { return _T(STR_SCENEEXPORT); /*GetStringT(IDS_SCENEEXPORT);*/  }
 };
 
@@ -187,6 +310,8 @@ class COLExportDesc : public ClassDesc {
 
 static DFFImportDesc importDesc;
 static DFFExportDesc exportDesc;
+static ANMImportDesc animImportDesc;
+static ANMExportDesc animExportDesc;
 static COLExportDesc colExportDesc;
 
 __declspec(dllexport) const TCHAR*
@@ -198,7 +323,7 @@ LibDescription(void) {
 }
 
 __declspec(dllexport) int
-LibNumberClasses(void) { return 3; }
+LibNumberClasses(void) { return 5; }
 
 __declspec(dllexport) ClassDesc*
 LibClassDesc(int i)
@@ -209,6 +334,10 @@ LibClassDesc(int i)
 	case 1:
 		return &exportDesc;
 	case 2:
+		return &animImportDesc;
+	case 3:
+		return &animExportDesc;
+	case 4:
 		return &colExportDesc;
 	default:
 		return NULL;

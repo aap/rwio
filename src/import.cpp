@@ -10,18 +10,6 @@ int DFFImport::fixKam = 0;
 
 std::vector<INode*> DFFImport::lastImported;
 
-const TCHAR*
-getMaxStr(const char *str)
-{
-#ifdef _UNICODE
-	static TCHAR fuckmax[MAX_PATH];
-	mbstowcs(fuckmax, str, MAX_PATH);
-	return fuckmax;
-#else
-	return str;
-#endif
-}
-
 char*
 getUserName(rw::UserDataExtension *ud)
 {
@@ -97,6 +85,7 @@ animateTexture(rw::Animation *anim, BitmapTex *tex)
 		        anim->interpInfo->id);
 		return;
 	}
+	extendAnimRange(anim->duration);
 	UVAnimKeyFrame *kf = (UVAnimKeyFrame*)anim->keyframes;
 	AnimateOn();
 	for(int32 i = 0; i < anim->numFrames; i++){
@@ -857,13 +846,7 @@ readClump(const TCHAR *filename)
 	StreamFile in;
 	Clump *c;
 
-#ifdef _UNICODE
-	char path[MAX_PATH];
-	wcstombs(path, filename, MAX_PATH);
-	if(in.open(path, "rb") == nil)
-#else
-	if(in.open(filename, "rb") == nil)
-#endif
+	if(in.open(getAsciiStr(filename), "rb") == nil)
 		return nil;
 	currentUVAnimDictionary = nil;
 	TexDictionary::setCurrent(TexDictionary::create());
@@ -1405,7 +1388,7 @@ DFFImport::LongDesc(void)
 const TCHAR*
 DFFImport::ShortDesc(void)
 {
-	return _T(STR_CLASSNAME); //GetStringT(IDS_CLASSNAME);
+	return _T(STR_DFFCLASSNAME); //GetStringT(IDS_CLASSNAME);
 }
 
 const TCHAR*

@@ -70,6 +70,21 @@ getRootOfSelection(Interface *ifc)
 	return nil;
 }
 
+// get the actual base object and not any modifier stuff
+Object*
+getBaseObject(INode *n)
+{
+	Object *obj = n->GetObjectRef();
+	while(obj->SuperClassID() != BASENODE_CLASS_ID){
+		if(obj->SuperClassID() == GEN_DERIVOB_CLASS_ID){
+			IDerivedObject *dobj = (IDerivedObject*)obj;
+			obj = dobj->GetObjRef();
+		}else
+			return obj;	// whatever, just return something that isn't nil
+	}
+	return obj;
+}
+
 void
 extendAnimRange(float duration)
 {

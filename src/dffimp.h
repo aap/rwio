@@ -61,6 +61,7 @@ const TCHAR *getMaxStr(const char *str);
 
 INode *getRootOf(INode *node);
 INode *getRootOfSelection(Interface *ifc);
+Object *getBaseObject(INode *n);
 void extendAnimRange(float duration);
 int getID(INode *node, int *id);
 int getChildNum(INode *node);

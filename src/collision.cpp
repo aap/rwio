@@ -7,7 +7,7 @@
 IParamBlock2*
 getColAttribs(INode *node)
 {
-	BaseObject *obj = node->GetObjectRef();
+	BaseObject *obj = getBaseObject(node);
 	ICustAttribContainer *cc = obj->GetCustAttribContainer();
 	if(cc){
 		int nca = cc->GetNumCustAttribs();

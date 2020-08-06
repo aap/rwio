@@ -992,7 +992,7 @@ DFFImport::dffFileRead(const TCHAR *filename)
 				// does some magic that causes the same frame not to be attached
 				// to multiple nodes. Then we can use getIndex(Frame*), fun!
 
-				// Doesn't always works: bones[hier->getIndex(hanim->id)] = node;
+				// Doesn't always work: bones[hier->getIndex(hanim->id)] = node;
 				boneIdx = hier->getIndex(f);
 				bones[boneIdx] = node;
 			}

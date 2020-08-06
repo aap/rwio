@@ -346,7 +346,7 @@ DFFExport::convertLight(rw::Frame *frame, rw::Clump *clump, INode *node)
 		snprintf(shapename, 128, "%sShape", getAsciiStr(node->GetName()));
 		UserDataArray::lightGet(rwlight, ud)->setString(0, shapename);
 	}
-	setUserProps(node->GetObjectRef()->GetCustAttribContainer(), _T("Texture"), UserDataExtension::get(rwlight));
+	setUserProps(getBaseObject(node)->GetCustAttribContainer(), _T("Texture"), UserDataExtension::get(rwlight));
 }
 
 void
@@ -374,7 +374,7 @@ DFFExport::convertCamera(rw::Frame *frame, rw::Clump *clump, INode *node)
 		snprintf(shapename, 128, "%sShape", getAsciiStr(node->GetName()));
 		UserDataArray::cameraGet(rwcam, ud)->setString(0, shapename);
 	}
-	setUserProps(node->GetObjectRef()->GetCustAttribContainer(), _T("Camera"), UserDataExtension::get(rwcam));
+	setUserProps(getBaseObject(node)->GetCustAttribContainer(), _T("Camera"), UserDataExtension::get(rwcam));
 }
 
 void
@@ -504,7 +504,10 @@ DFFExport::convertNode(rw::Clump *clump, rw::Frame *frame, INode *node, int flip
 		int ud = UserDataArray::frameAdd(frame, getAsciiStr(DFFExport::exportObjNames_Entry), USERDATASTRING, 1);
 		UserDataArray::frameGet(frame, ud)->setString(0, getAsciiStr(node->GetName()));
 	}
-	setUserProps(node->GetObjectRef()->GetCustAttribContainer(), _T("Transform"), UserDataExtension::get(frame));
+	ICustAttribContainer *attribs = node->GetCustAttribContainer();
+	if(attribs == nil)
+		attribs = getBaseObject(node)->GetCustAttribContainer();
+	setUserProps(attribs, _T("Transform"), UserDataExtension::get(frame));
 
 	int thisIndex = -1;
 	int oldNumNodes = -1;

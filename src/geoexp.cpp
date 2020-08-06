@@ -432,7 +432,10 @@ DFFExport::convertGeometry(INode *node, int **vertexmap)
 		snprintf(shapename, 128, "%sShape", getAsciiStr(node->GetName()));
 		UserDataArray::geometryGet(geo, ud)->setString(0, shapename);
 	}
-	setUserProps(node->GetObjectRef()->GetCustAttribContainer(), _T("Object"), UserDataExtension::get(geo));
+	ICustAttribContainer *attribs = node->GetCustAttribContainer();
+	if(attribs == nil)
+		attribs = getBaseObject(node)->GetCustAttribContainer();
+	setUserProps(attribs, _T("Object"), UserDataExtension::get(geo));
 
 	return geo;
 }
@@ -490,6 +493,7 @@ DFFExport::convertSkin(rw::Geometry *geo, rw::Frame *frame, INode *node, Modifie
 	/* calculate inverse bone matrices */
 	rw::Matrix tmp;
 	for(int i = 0; i < this->numNodes; i++){
+		// this xforms coordinates in frame's (i.e. the atomic's) space to the node's space
 		rw::Matrix::invert(&tmp, this->nodearray[i].frame->getLTM());
 		rw::Matrix::mult((rw::Matrix*)&rwskin->inverseMatrices[i*16], frame->getLTM(), &tmp);
 	}

@@ -566,6 +566,20 @@ DFFImport::makeMesh(rw::Atomic *a, Mesh *maxmesh)
 		}
 	}
 
+	if(g->flags & rw::Geometry::NORMALS){
+		for(int32 i = 0; i < g->numTriangles; i++){
+			// See if we can figure out a better winding if we have normals
+			V3d v01 = sub(gverts[g->triangles[i].v[1]], gverts[g->triangles[i].v[0]]);
+			V3d v02 = sub(gverts[g->triangles[i].v[2]], gverts[g->triangles[i].v[0]]);
+			V3d norm = cross(v01, v02);
+			float dot0 = dot(norm, gnorms[g->triangles[i].v[0]]);
+			float dot1 = dot(norm, gnorms[g->triangles[i].v[1]]);
+			float dot2 = dot(norm, gnorms[g->triangles[i].v[2]]);
+			if(dot0 < 0.0f && dot1 < 0.0f && dot2 < 0.0f)
+				maxmesh->FlipNormal(i);
+		}
+	}
+
 	maxmesh->DeleteIsoVerts();
 	maxmesh->DeleteIsoMapVerts();
 

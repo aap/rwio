@@ -109,7 +109,11 @@ makeTexturePath(MCHAR *in, MCHAR *out)
 	for(int i = 0; exsts[i]; i++){
 		_tcscpy(test, in);
 		_tcscat(test, exsts[i]);
+#if MAX_API_NUM >= 60	// 2022
+		if(BMMGetFullFilename(test, out, MAX_PATH))
+#else
 		if(BMMGetFullFilename(test, out))
+#endif
 			return;
 	}
 	_tcscpy(out, in);

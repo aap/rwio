@@ -1,19 +1,20 @@
-DFF Import and Exporter 2.1a for 3ds max
+DFF Import and Exporter 3.3 for 3ds max
 =======================================
 
 Compatibility
 ==============
- Works with 3ds max [2009, 2010, 2011, 2012, 2014, 2015, 2016] x64
+ Works with 3ds max 2009, 2010, 2011, 2012, 2014, 2015, 2016, 2017, 2018, 2020, 2021, 2022 64 bit and 2009, 2010, 2011, 2012 32 bit
 
 Installation
 ============
- - dffplg_[your_version].dli into [maxdir]/plugins
+ - plugins/[yourarchitecture]/rwio[your_version].dli into [maxdir]/plugins
  - startup into [maxdir]/scripts
 
 Features
 ========
  - new RW material implemented
-    (to convert to Kam's material use the MAXscript utility that comes with this plugin)
+    (to convert between Kam's material and this RW material
+     use the MAXscript utility that comes with this plugin)
  - import PS2, Xbox (uncompressed only), mobile, d3d8 and d3d9 native geometry
  - import UV animations
  - SA extra vertex colors (RGB channel -1, alpha channel 9)
@@ -24,12 +25,16 @@ Import options
  - "Convert frame hierarchy" - Rotates the hierarchy and deletes a dummy node.
 	Turning this off will import the raw hierarchy unchanged.
  - "Auto smooth" - Auto smooth imported meshes.
+ - "Explicit normals" - Sets normals explicitly, you cannot change them with smoothing groups.
+ - "Import as Standard Materials" - Create standard max materials instead of RW materials
+ - "Take Material ID from Mesh" - use this to import KAM dffs, which have broken material IDs in Geometry
 
 Export options
 ==============
  - "Lighting Flag" - Export the geometry with the lighting flag set.
  - "Vertex Normals" - Export normals with the geometry.
  - "Vertex Prelights" - Export vertex colors with the geometry.
+ - "Tristrip" - Export mesh as tristrip (as opposed to trilist). Somewhat experimental.
  - "Create HAnim Hierarchy" - Creates a HAnim Hierarchy (to be used with skinned models).
  - "Export Skinning" - Export skinned geometry attached to the hierarchy.
  - "World Space" - Export the model in world space.
@@ -46,6 +51,8 @@ skin data or the hierarchy.
 
 To assign IDs to nodes in the hierarchy set the user property "tag".
 A negative ID causes the node and its children not to be part of the HAnim hierarchy.
+To sort the order of children on import (which is important to have a predictable
+hierarchy), set the user property "childNum".
 
 Hierarchies that were originally exported from a Biped object by the official RW
 exporter will have a "fakeBiped" user property set on the biped root that has to
@@ -57,12 +64,15 @@ MAXscript
   - "convertHierarchy"
   - "autoSmooth"
   - "smoothingAngle"
+  - "importStdMaterials"
+  - "fixMaterialIDs"
   - "prepend" - not accessible through the import dialog. Prepends "!" to all names to avoid clashes when batch-importing. You're expected to rename all the imported nodes immediately after import
 
  - "dffExp" controls the following exporter settings:
   - "lighting"
   - "normals"
   - "prelight"
+  - "tristrip"
   - "worldSpace"
   - "createHAnim"
   - "skinning"
@@ -75,9 +85,8 @@ TODO
  - SA 2dfx
  - SA collision
  - SA breakable mesh
- - import Kam's broken DFFs
  - export UV animations
- - export tri-strips
+ - lots more
 
 Changelog
 =========
@@ -88,3 +97,11 @@ Changelog
 2.1 - handle scaled/translated geometry correctly; sort nodes by ID;
 	cameras and lights correctly oriented; bug fixes
 2.1a - bug fixes
+3.0 - new version after long time, don't remember changes, mostly fixes
+3.1 - explicit normals
+3.2 - fixes
+3.2a - fixed importing of weights
+3.2b - fixed erronous export of vertex colors
+3.2c - apparently fix didn't work? also max 2021
+3.3 - add import std material, fix matid; export tristrip
+3.4 - anm support; user data support; option to derive face winding from normals; fixes

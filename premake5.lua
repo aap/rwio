@@ -83,12 +83,12 @@ project "rwio2010"
 	maxplugin1(maxsdk)
 
 project "rwio2012"
-	maxsdk = "C:/Program Files (x86)/Autodesk/3ds Max 2012/maxsdk/"
+	maxsdk = "C:/Users/aap/src/maxsdk/3ds Max 2012/maxsdk/"
 	maxplugin1(maxsdk)
 	filter { "platforms:amd64" }
-		debugdir "C:/Program Files/Autodesk/3ds Max 2012"
-		debugcommand "C:/Program Files/Autodesk/3ds Max 2012/3dsmax.exe"
-		postbuildcommands "copy /y \"$(TargetPath)\" \"C:\\Program Files\\Autodesk\\3ds Max 2012\\plugins\\\""
+		debugdir "E:/Program Files/Autodesk/3ds Max 2012"
+		debugcommand "E:/Program Files/Autodesk/3ds Max 2012/3dsmax.exe"
+		postbuildcommands "copy /y \"$(TargetPath)\" \"E:\\Program Files\\Autodesk\\3ds Max 2012\\plugins\\\""
 
 project "rwio2014"
 	maxsdk = "C:/Users/aap/src/maxsdk/3ds Max 2014 SDK/maxsdk/"
@@ -112,4 +112,8 @@ project "rwio2020"
 
 project "rwio2021"
 	maxsdk = "C:/Users/aap/src/maxsdk/3ds Max 2021 SDK/maxsdk/"
+	maxplugin2(maxsdk)
+
+project "rwio2022"
+	maxsdk = "C:/Users/aap/src/maxsdk/3ds Max 2022 SDK/maxsdk/"
 	maxplugin2(maxsdk)

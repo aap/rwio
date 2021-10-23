@@ -278,6 +278,7 @@ class DFFImportDesc : public ClassDesc {
 	int IsPublic(void) { return 1; }
 	void *Create(BOOL loading = FALSE) { return new DFFImport; }
 	const TCHAR *ClassName(void) { return _T(STR_DFFCLASSNAME); /*GetStringT(IDS_CLASSNAME);*/ }
+	const MCHAR *NonLocalizedClassName(void) { return _M(STR_DFFCLASSNAME); }
 	SClass_ID SuperClassID(void) { return SCENE_IMPORT_CLASS_ID; }
 	Class_ID ClassID(void) { return Class_ID(0xc42486c, 0x6f900bef); }
 	const TCHAR *Category(void) { return _T(STR_SCENEIMPORT); /*GetStringT(IDS_SCENEIMPORT);*/  }
@@ -288,6 +289,7 @@ class DFFExportDesc : public ClassDesc {
 	int IsPublic(void) { return 1; }
 	void *Create(BOOL loading = FALSE) { return new DFFExport; }
 	const TCHAR *ClassName(void) { return _T(STR_DFFCLASSNAME); /*GetStringT(IDS_CLASSNAME);*/ }
+	const MCHAR *NonLocalizedClassName(void) { return _M(STR_DFFCLASSNAME); }
 	SClass_ID SuperClassID(void) { return SCENE_EXPORT_CLASS_ID; }
 	Class_ID ClassID(void) { return Class_ID(0x6e2a398d, 0x2afe6e70); }
 	const TCHAR *Category(void) { return _T(STR_SCENEEXPORT); /*GetStringT(IDS_SCENEEXPORT);*/  }
@@ -298,6 +300,7 @@ class ANMImportDesc : public ClassDesc {
 	int IsPublic(void) { return 1; }
 	void *Create(BOOL loading = FALSE) { return new ANMImport; }
 	const TCHAR *ClassName(void) { return _T(STR_ANMCLASSNAME); /*GetStringT(IDS_CLASSNAME);*/ }
+	const MCHAR *NonLocalizedClassName(void) { return _M(STR_ANMCLASSNAME); }
 	SClass_ID SuperClassID(void) { return SCENE_IMPORT_CLASS_ID; }
 	Class_ID ClassID(void) { return Class_ID(0x7de72f47, 0x2d020d73); }
 	const TCHAR *Category(void) { return _T(STR_SCENEIMPORT); /*GetStringT(IDS_SCENEEXPORT);*/  }
@@ -308,6 +311,7 @@ class ANMExportDesc : public ClassDesc {
 	int IsPublic(void) { return 1; }
 	void *Create(BOOL loading = FALSE) { return new ANMExport; }
 	const TCHAR *ClassName(void) { return _T(STR_ANMCLASSNAME); /*GetStringT(IDS_CLASSNAME);*/ }
+	const MCHAR *NonLocalizedClassName(void) { return _M(STR_ANMCLASSNAME); }
 	SClass_ID SuperClassID(void) { return SCENE_EXPORT_CLASS_ID; }
 	Class_ID ClassID(void) { return Class_ID(0xa9d6559, 0x55eb1212); }
 	const TCHAR *Category(void) { return _T(STR_SCENEEXPORT); /*GetStringT(IDS_SCENEEXPORT);*/  }
@@ -318,6 +322,7 @@ class COLExportDesc : public ClassDesc {
 	int IsPublic(void) { return 1; }
 	void *Create(BOOL loading = FALSE) { return new COLExport; }
 	const TCHAR *ClassName(void) { return _T("GTA Collision"); /*GetStringT(IDS_CLASSNAME);*/ }
+	const MCHAR *NonLocalizedClassName(void) { return _M("GTA Collision"); }
 	SClass_ID SuperClassID(void) { return SCENE_EXPORT_CLASS_ID; }
 	Class_ID ClassID(void) { return Class_ID(0x12480f60, 0x41820396); }
 	const TCHAR *Category(void) { return _T(STR_SCENEEXPORT); /*GetStringT(IDS_SCENEEXPORT);*/  }

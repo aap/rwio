@@ -1,9 +1,9 @@
-DFF Import and Exporter 3.3 for 3ds max
+DFF Import and Exporter 3.4 for 3ds max
 =======================================
 
 Compatibility
 ==============
- Works with 3ds max 2009, 2010, 2011, 2012, 2014, 2015, 2016, 2017, 2018, 2020, 2021, 2022 64 bit and 2009, 2010, 2011, 2012 32 bit
+ Works with 3ds max 2009, 2010, 2011, 2012, 2014, 2015, 2016, 2017, 2018, 2020, 2021, 2022, 2023 64 bit and 2009, 2010, 2011, 2012 32 bit
 
 Installation
 ============

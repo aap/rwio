@@ -6,6 +6,7 @@ workspace "rwio"
 	platforms { "x86", "amd64" }
 	location "build"
 	system "Windows"
+	cppdialect "c++17"
 
 	filter { "platforms:x86" }
 		architecture "x86"
@@ -116,4 +117,16 @@ project "rwio2021"
 
 project "rwio2022"
 	maxsdk = "C:/Users/aap/src/maxsdk/3ds Max 2022 SDK/maxsdk/"
+	maxplugin2(maxsdk)
+
+project "rwio2023"
+	maxsdk = "C:/Users/aap/src/maxsdk/3ds Max 2023 SDK/maxsdk/"
+	maxplugin2(maxsdk)
+
+project "rwio2024"
+	maxsdk = "C:/Users/aap/src/maxsdk/3ds Max 2024 SDK/maxsdk/"
+	maxplugin2(maxsdk)
+
+project "rwio2025"
+	maxsdk = "C:/Users/aap/src/maxsdk/3ds Max 2025 SDK/maxsdk/"
 	maxplugin2(maxsdk)

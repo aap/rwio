@@ -65,6 +65,9 @@ convertSphere(CColSphere *colsphere, INode *spherenode)
 	colsphere->piece = getPieceType(pb);
 }
 
+#define MIN(a,b) ((a) < (b) ? (a) : (b))
+#define MAX(a,b) ((a) > (b) ? (a) : (b))
+
 static void
 convertBox(CColBox *colbox, INode *boxnode)
 {
@@ -84,8 +87,8 @@ convertBox(CColBox *colbox, INode *boxnode)
 	min = objectTM * min;
 	max = objectTM * max;
 
-	colbox->min.set(min(min.x, max.x), min(min.y, max.y), min(min.z, max.z));
-	colbox->max.set(max(min.x, max.x), max(min.y, max.y), max(min.z, max.z));
+	colbox->min.set(MIN(min.x, max.x), MIN(min.y, max.y), MIN(min.z, max.z));
+	colbox->max.set(MAX(min.x, max.x), MAX(min.y, max.y), MAX(min.z, max.z));
 	colbox->surface = getSurface(pb);
 	colbox->piece = getPieceType(pb);
 }

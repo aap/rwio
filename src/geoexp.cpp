@@ -236,8 +236,10 @@ convertMaterials(rw::Geometry *geo, INode *node)
 	}else if(mtl->ClassID() == Class_ID(MULTI_CLASS_ID, 0)){
 		for(int i = 0; i < mtl->NumSubMtls(); i++){
 			Mtl *submtl = mtl->GetSubMtl(i);
-			assert(submtl);	// TODO: figure out what's going on here
-			geo->matList.appendMaterial(convertMaterial(submtl));
+			if(submtl)
+				geo->matList.appendMaterial(convertMaterial(submtl));
+			else
+				geo->matList.appendMaterial(rw::Material::create());
 		}
 	}else
 		geo->matList.appendMaterial(convertMaterial(mtl));
